@@ -1,0 +1,153 @@
+/**
+ * Suivi des situations de rapprochement et évaluation règle par règle du chef de quart.
+ * Les évaluations utilisent la vérité terrain (pas les données ARPA bruitées).
+ * Chaque message doit citer la règle RIPAM concernée.
+ */
+import { S, logE, type Encounter, type Msg, type Report, type Target } from '../core/state';
+import { ROLE_TXT } from '../core/data';
+import { K2N, adiff, brgOf, cpaOf, fMin, n360, vec } from '../core/util';
+import { SCEN } from './scenarios';
+import { roleOf } from './rules';
+
+export function tLabel(t: Target): string {
+  const tr = S.tracks.find((k) => k.tid === t.id);
+  return tr ? `cible ${tr.n}` : `écho non acquis (${t.name})`;
+}
+
+export function encStep(): void {
+  const o = S.own;
+  if (S.env.vis === 'poor') { S.spdPoor[0] += o.stw; S.spdPoor[1]++; }
+  for (const t of S.targets) {
+    const rx = t.x - o.x, ry = t.y - o.y, range = Math.hypot(rx, ry);
+    const c = cpaOf(rx, ry, (t.vx - o.vx) * K2N, (t.vy - o.vy) * K2N);
+    let e: Encounter | undefined = S.enc[t.id];
+    if (!e) {
+      if (range < 12 && c.tcpa > 0 && c.tcpa < 2700 && c.cpa < 1) {
+        const ob = n360(brgOf(-rx, -ry) - t.hdg);
+        e = S.enc[t.id] = {
+          tid: t.id, role: roleOf(o, t, S.env.vis), t0: S.t, h0: o.hdg, v0: o.stw, th0: t.hdg, tv0: t.stw,
+          tb0: n360(brgOf(rx, ry) - o.hdg), weOvertake: ob > 112.5 && ob < 247.5 && o.stw > t.stw,
+          minR: range, fc: null, fs: null, maxDev: 0, maxRed: 0, crossedAhead: false, side: null, tgtActT: null, closed: false, tracked: false,
+        };
+      } else continue;
+    }
+    if (e.closed) continue;
+    e.minR = Math.min(e.minR, range);
+    if (S.tracks.some((k) => k.tid === t.id && k.state !== 'ACQ')) e.tracked = true;
+    if (!e.tgtActT && (Math.abs(adiff(t.hdg, e.th0)) > 10 || t.stw < e.tv0 * 0.75)) e.tgtActT = S.t;
+    const dev = adiff(o.hdg, e.h0), red = e.v0 > 1 ? 1 - o.stw / e.v0 : 0, tb = n360(brgOf(rx, ry) - o.hdg);
+    if (!e.fc && Math.abs(dev) > 10) e.fc = { t: S.t, dir: Math.sign(dev), tcpa: c.tcpa, r: range, tb, tgtActed: !!e.tgtActT };
+    if (!e.fs && red > 0.25) e.fs = { t: S.t, tcpa: c.tcpa, r: range, tb, tgtActed: !!e.tgtActT };
+    if (e.fc && Math.sign(dev) === e.fc.dir) e.maxDev = Math.max(e.maxDev, Math.abs(dev));
+    e.maxRed = Math.max(e.maxRed, red);
+    // passage sur l'avant de la cible (tant qu'elle n'a pas manœuvré)
+    if (!e.tgtActT) {
+      const hv = vec(t.hdg, 1), ox = -rx, oy = -ry, side = Math.sign(hv.x * oy - hv.y * ox), ahead = hv.x * ox + hv.y * oy > 0;
+      if (e.side !== null && side !== 0 && side !== e.side && ahead && range < 3) e.crossedAhead = true;
+      if (side !== 0) e.side = side;
+    }
+    if (c.tcpa < 0 && range > Math.max(1.5, e.minR * 1.6)) {
+      e.closed = true; e.res = evalEnc(e, t, false);
+      logE(`Situation dégagée : ${tLabel(t)} (dist. min ${e.minR.toFixed(2)} NM)`);
+    }
+  }
+}
+
+function firstAct(e: Encounter) {
+  if (e.fc && e.fs) return e.fc.t <= e.fs.t ? e.fc : e.fs;
+  return e.fc || e.fs;
+}
+
+export function evalEnc(e: Encounter, t: Target, unfinished: boolean): { pen: number; m: Msg[] } {
+  const m: Msg[] = [], o = S.own;
+  let pen = 0;
+  const colD = ((o.L / 2 + t.L / 2) / 1852) * 0.7, A = firstAct(e), C = e.fc, r = e.role;
+  if (e.minR < colD) { pen += 100; m.push(['bad', 'Abordage.']); }
+  else if (e.minR < 0.25) { pen += 35; m.push(['bad', `Passage à ${e.minR.toFixed(2)} NM : situation très rapprochée.`]); }
+  else if (e.minR < 0.5) { pen += 12; m.push(['warn', `Distance minimale ${e.minR.toFixed(2)} NM : marge faible en haute mer (R8d : passer à distance suffisante).`]); }
+  else m.push(['ok', `Distance minimale ${e.minR.toFixed(2)} NM.`]);
+  if (!e.tracked) { pen += 5; m.push(['warn', "Cible jamais suivie à l'ARPA : R7 demande une utilisation appropriée du radar (acquisition, observation systématique)."]); }
+
+  if (r === 'giveway' || r === 'giveway18' || r === 'overtaking' || r === 'headon') {
+    if (!A) {
+      if (e.minR < 1) {
+        pen += 30;
+        m.push(['bad', r === 'headon' ? 'Aucune manœuvre en situation de face : R14 impose à chacun de venir sur tribord.' : 'Aucune manœuvre alors que vous deviez vous écarter (R16 : manœuvrer tôt et franchement).']);
+      }
+    } else {
+      if (A.tcpa < 5 * 60) { pen += 12; m.push(['warn', `Manœuvre tardive (TCPA ${fMin(A.tcpa)} au déclenchement) : R8a, R16.`]); }
+      else m.push(['ok', `Manœuvre engagée à TCPA ${fMin(A.tcpa)}, à ${A.r.toFixed(1)} NM.`]);
+      if (e.maxDev < 30 && e.maxRed < 0.4) {
+        pen += 10;
+        m.push(['warn', `Manœuvre peu apparente (${Math.round(e.maxDev)}° max${e.maxRed > 0.05 ? ', vitesse −' + Math.round(e.maxRed * 100) + ' %' : ''}) : R8b demande un changement assez important pour être perçu au radar ou à vue.`]);
+      }
+      if (C && C.dir < 0 && C.tb < 112.5 && r !== 'overtaking') {
+        if (r === 'headon') { pen += 30; m.push(['bad', 'Changement de cap sur bâbord : R14 impose de venir sur tribord.']); }
+        else { pen += 15; m.push(['warn', "Abattée sur bâbord pour un navire situé sur tribord : contraire aux bons usages (risque de manœuvres opposées si l'autre agit au titre de R17)."]); }
+      }
+    }
+    if (e.crossedAhead && (r === 'giveway' || r === 'giveway18')) { pen += 20; m.push(['bad', "Vous avez coupé la route sur l'avant du navire privilégié (R15 : éviter de croiser devant)."]); }
+  } else if (r === 'standon' || r === 'overtaken') {
+    if (A && !A.tgtActed && A.tcpa > 10 * 60) { pen += 15; m.push(['warn', `Manœuvre à TCPA ${fMin(A.tcpa)} alors que l'autre avait encore le temps d'agir : R17a(i) impose de maintenir cap et vitesse.`]); }
+    else if (A && !A.tgtActed) m.push(['ok', `Manœuvre d'initiative à TCPA ${fMin(A.tcpa)}, l'autre n'ayant pas réagi : R17a(ii).`]);
+    else if (A && A.tgtActed) m.push(['info', 'Vous avez manœuvré après le non privilégié : vérifiez que votre action ne contrarie pas la sienne.']);
+    if (C && C.dir < 0 && r === 'standon' && C.tb > 247.5) { pen += 25; m.push(['bad', 'R17c : en croisement, ne pas venir sur bâbord pour un navire situé sur bâbord.']); }
+    if (!A && !e.tgtActT && e.minR < 0.3) { pen += 25; m.push(['bad', "Ni lui ni vous n'avez manœuvré : R17b impose d'agir quand l'abordage ne peut plus être évité par le seul non privilégié."]); }
+    if (!A && e.minR >= 0.5) m.push(['ok', 'Cap et vitesse maintenus comme navire privilégié : R17a(i).']);
+  } else if (r === 'R19') {
+    const tb = C ? C.tb : e.tb0, fwd = tb < 90 || tb > 270;
+    if (!A && e.minR < 1) { pen += 25; m.push(['bad', 'Aucune manœuvre : en visibilité réduite, le navire qui détecte au radar une situation très rapprochée doit manœuvrer largement à temps (R19d).']); }
+    if (C) {
+      if (C.dir < 0 && fwd && !e.weOvertake) { pen += 25; m.push(['bad', "R19d(i) : changement de cap sur bâbord pour un navire sur l'avant du travers."]); }
+      if (!fwd && ((tb <= 180 && C.dir > 0) || (tb > 180 && C.dir < 0))) { pen += 25; m.push(['bad', "R19d(ii) : changement de cap vers un navire par le travers ou sur l'arrière du travers."]); }
+      if (C.dir > 0 && fwd) m.push(['ok', "Venue sur tribord pour un navire sur l'avant du travers : conforme à R19d(i)."]);
+    }
+    if (A && A.tcpa < 6 * 60) { pen += 10; m.push(['warn', `Manœuvre tardive (TCPA ${fMin(A.tcpa)}) : R19d demande d'agir « largement à temps ».`]); }
+    if (fwd && e.minR < 1 && e.maxRed < 0.3) { pen += 5; m.push(['warn', "Navire sur l'avant du travers à moins d'1 NM sans réduction de vitesse : R19e (réduire au minimum de manœuvre, casser l'erre si besoin)."]); }
+  }
+  if (unfinished) m.push(['info', "Situation non terminée au moment de l'évaluation."]);
+  return { pen: Math.min(pen, 100), m };
+}
+
+/** Détection d'abordage (distance < 70 % de la somme des demi-longueurs). */
+export function checkCol(): void {
+  const o = S.own;
+  for (const t of S.targets) {
+    if (Math.hypot(t.x - o.x, t.y - o.y) < ((o.L / 2 + t.L / 2) / 1852) * 0.7) {
+      logE(`ABORDAGE avec ${tLabel(t)} — ${t.name} ${t.L} m`, 'bad');
+      S.collided = t.id;
+      finish();
+      return;
+    }
+  }
+}
+
+/** Termine l'exercice et construit le rapport (rendu par l'interface). */
+export function finish(): void {
+  if (S.over) return;
+  S.over = true; S.paused = true;
+  let pen = 0, unfinished = 0;
+  const items: Report['items'] = [], global: Msg[] = [];
+  for (const t of S.targets) {
+    const e = S.enc[t.id];
+    if (!e) continue;
+    if (!e.closed) { e.res = evalEnc(e, t, true); unfinished++; }
+    const res = e.res!;
+    pen += res.pen;
+    const info = (t.ai.done || '') + (t.ai.state === 'avoid' ? t.ai.info || '' : '');
+    items.push({
+      label: tLabel(t), name: t.name, L: t.L, role: ROLE_TXT[e.role] || e.role, msgs: res.m,
+      other: info ? info.replace(/ ; $/, '') : t.type === 'nuc' ? 'non maître de sa manœuvre, a dérivé' : 'a maintenu cap et vitesse',
+    });
+  }
+  if (S.spdPoor[1] > 60) {
+    const avg = S.spdPoor[0] / S.spdPoor[1], max = S.own.ship.max;
+    if (avg > 0.75 * max) { pen += 10; global.push(['warn', `Vitesse moyenne ${avg.toFixed(1)} kn en brume (${Math.round((avg / max) * 100)} % du max) : R6 et R19b, vitesse de sécurité.`]); }
+    else global.push(['ok', `Vitesse adaptée à la visibilité réduite (${avg.toFixed(1)} kn de moyenne).`]);
+  }
+  const collided = S.collided !== null;
+  if (unfinished && !collided) global.push(['info', `Exercice interrompu : ${unfinished} situation(s) encore en cours, la note ne porte que sur ce qui a été joué.`]);
+  const score = collided ? 0 : Math.max(0, 100 - pen);
+  const grade = collided ? 'Abordage' : unfinished ? 'Exercice interrompu' : score >= 85 ? 'Très bien' : score >= 70 ? 'Correct' : score >= 50 ? 'Insuffisant' : 'Dangereux';
+  S.report = { score, grade, scen: SCEN[S.scen].n, duration: S.t, global, items, collided };
+}
