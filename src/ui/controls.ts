@@ -120,7 +120,7 @@ export function upd(): void {
   $('nRud').textContent = fmtR(o.rud) + '°';
   $('nRot').textContent = (o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60) + '°/min';
   $('nCmd').textContent = o.ap ? p3(o.cmdHdg) + '°' : 'manuel';
-  $('nTel').textContent = TELE[o.tele].n;
+  $('nTel').textContent = o.ship.mmg ? `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min` : TELE[o.tele].n;
   $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'} · ${SCEN[S.scen].n}`;
   document.querySelectorAll<HTMLElement>('[data-seg]').forEach((sg) => {
     const k = SEGS[sg.dataset.seg!];
@@ -133,7 +133,9 @@ export function upd(): void {
   $('manBox').style.display = o.ap ? 'none' : '';
   $('cmdTxt').textContent = p3(o.cmdHdg);
   $('rudTxt').textContent = fmtR(o.manRud) + '°';
-  $('shipInfo').textContent = `${o.ship.n} · vitesse max ${o.ship.max} kn · inertie et giration selon la vitesse (barre inefficace sans erre ni hélice).`;
+  $('shipInfo').textContent = o.ship.mmg
+    ? `${o.ship.n} · vitesse de service ${o.ship.max} kn · modèle MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`
+    : `${o.ship.n} · vitesse max ${o.ship.max} kn · modèle simplifié de Nomoto (inertie et giration selon la vitesse).`;
   $('rngTxt').textContent = R.range + ' NM';
   $('trHTxt').textContent = p3(R.trialHdg) + '°';
   $('trSTxt').textContent = R.trialSpd + ' kn';

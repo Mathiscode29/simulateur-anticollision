@@ -1,5 +1,6 @@
 /** Types et état global de la simulation. Aucun accès au DOM ici. */
 import { SHIPS } from './data';
+import type { MMGParams } from '../sim/mmg';
 
 export type TargetType = 'power' | 'small' | 'fish' | 'sail' | 'nuc' | 'ram';
 export type Role = 'giveway' | 'standon' | 'headon' | 'overtaking' | 'overtaken' | 'giveway18' | 'standon18' | 'R19';
@@ -9,11 +10,22 @@ export type Compliance = 'disc' | 'real' | 'hostile';
 export type MsgLevel = 'ok' | 'warn' | 'bad' | 'info';
 export type Msg = [MsgLevel, string];
 
-export interface ShipModel { n: string; L: number; max: number; Kp: number; Tp: number; wind: number; acc: number; dec: number }
+/**
+ * Navire porteur. Sans `mmg` : modèle de Nomoto 1er ordre (Kp, Tp, wind, acc, dec).
+ * Avec `mmg` : modèle MMG 3 DDL (src/sim/mmg.ts), les champs Nomoto sont alors ignorés.
+ */
+export interface ShipModel {
+  n: string; L: number; max: number; Kp: number; Tp: number; wind: number; acc: number; dec: number;
+  mmg?: MMGParams;
+  /** Source des données, affichée dans l'interface. */
+  src?: string;
+}
 
 export interface OwnShip {
   x: number; y: number; hdg: number; cmdHdg: number; stw: number; rot: number; rud: number;
   tele: number; ap: boolean; manRud: number; rudLim: number; ship: ShipModel; type: 'power'; L: number; vx: number; vy: number;
+  /** Modèle MMG : vitesses surface dans le repère navire (m/s, rad/s), régime hélice (tr/s), fin de l'attente de renversement (s). */
+  u: number; v: number; r: number; n: number; revUntil: number;
 }
 
 /** Écho radar tel que peint au dernier passage du faisceau (position relative au porteur). */
@@ -72,7 +84,7 @@ export interface State {
 
 function defaultOwn(): OwnShip {
   const ship = SHIPS.ferry;
-  return { x: 0, y: 0, hdg: 0, cmdHdg: 0, stw: 0, rot: 0, rud: 0, tele: 2, ap: true, manRud: 0, rudLim: 20, ship, type: 'power', L: ship.L, vx: 0, vy: 0 };
+  return { x: 0, y: 0, hdg: 0, cmdHdg: 0, stw: 0, rot: 0, rud: 0, tele: 2, ap: true, manRud: 0, rudLim: 20, ship, type: 'power', L: ship.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0 };
 }
 
 export const S: State = {
