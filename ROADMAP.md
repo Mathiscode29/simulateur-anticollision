@@ -19,8 +19,9 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Machine : variation de régime limitée, attente au renversement, arrêt d'urgence
 - [x] Vent appliqué en efforts (fardage) sur le modèle MMG
 - [ ] Comparaison chiffrée avec les essais libres publiés (SIMMAN) et recalage
-- [ ] Porte-conteneurs : KCS (230 m) puis grand porte-conteneurs (ULCV) avec fardage des piles de conteneurs
-- [ ] Remplacer les modèles Nomoto restants (ferry, navire d'expédition) par des jeux MMG sourcés
+- [x] Un seul navire porteur pour l'instant (KVLCC2) ; anciens modèles simplifiés retirés
+- [ ] Porte-conteneurs KCS (230 m) : en attente d'un jeu de coefficients MMG publié complet (voir CLAUDE.md), puis validation contre les giration en essais libres (avance ≈ 2,9 L, diamètre tactique ≈ 2,9 L Td / 2,6 L Bd)
+- [ ] Ensuite seulement : grand porte-conteneurs (ULCV) avec fardage des piles de conteneurs
 - [ ] Secteur aveugle sur l'avant (SOLAS V/22) pour les porte-conteneurs
 - [ ] Effet des petits fonds (squat, perte de manœuvrabilité)
 - [ ] Courant de marée variable dans l'espace et le temps

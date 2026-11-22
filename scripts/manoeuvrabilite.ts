@@ -12,7 +12,6 @@ const ok = (c: boolean) => (c ? '✅' : '❌');
 let md = `# Rapport de manœuvrabilité (simulation)\n\n`;
 md += `Manœuvres normalisées simulées en eau profonde, sans vent ni courant, à la vitesse de service, comparées aux critères de la résolution OMI MSC.137(76). Fichier généré par \`npm run manoeuvrabilite\`.\n\n`;
 for (const [key, s] of Object.entries(SHIPS)) {
-  if (!s.mmg) continue;
   const tc = turningCircle(s, 35), tcp = turningCircle(s, -35), z10 = zigzag(s, 10), z20 = zigzag(s, 20);
   const it = initialTurning(s), st = stopping(s), ap = autopilotChange(s, 30), LV = z10.LV;
   md += `## ${s.n} (\`${key}\`)\n\nSource : ${s.src ?? '—'}. L = ${s.L} m, vitesse de service ${s.max} kn, L/V = ${f(LV, 1)} s, régime allure mer ${f(nSea(s.mmg) * 60, 1)} tr/min.\n\n`;

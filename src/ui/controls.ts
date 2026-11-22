@@ -1,6 +1,6 @@
 /** Interface : onglets, commandes passerelle, réglages radar, table ARPA, bilan. */
 import { S, logE, type Compliance, type RadarSettings, type Visibility } from '../core/state';
-import { RANGES, SHIPS, TELE } from '../core/data';
+import { RANGES, TELE } from '../core/data';
 import { brgOf, clamp, fMin, fT, n360, p3 } from '../core/util';
 import { SCEN, newScenario } from '../sim/scenarios';
 import { acquire, SWP } from '../sim/radar';
@@ -120,7 +120,7 @@ export function upd(): void {
   $('nRud').textContent = fmtR(o.rud) + '°';
   $('nRot').textContent = (o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60) + '°/min';
   $('nCmd').textContent = o.ap ? p3(o.cmdHdg) + '°' : 'manuel';
-  $('nTel').textContent = o.ship.mmg ? `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min` : TELE[o.tele].n;
+  $('nTel').textContent = `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min`;
   $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'} · ${SCEN[S.scen].n}`;
   document.querySelectorAll<HTMLElement>('[data-seg]').forEach((sg) => {
     const k = SEGS[sg.dataset.seg!];
@@ -133,9 +133,7 @@ export function upd(): void {
   $('manBox').style.display = o.ap ? 'none' : '';
   $('cmdTxt').textContent = p3(o.cmdHdg);
   $('rudTxt').textContent = fmtR(o.manRud) + '°';
-  $('shipInfo').textContent = o.ship.mmg
-    ? `${o.ship.n} · vitesse de service ${o.ship.max} kn · modèle MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`
-    : `${o.ship.n} · vitesse max ${o.ship.max} kn · modèle simplifié de Nomoto (inertie et giration selon la vitesse).`;
+  $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${o.ship.max} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`;
   $('rngTxt').textContent = R.range + ' NM';
   $('trHTxt').textContent = p3(R.trialHdg) + '°';
   $('trSTxt').textContent = R.trialSpd + ' kn';
@@ -186,9 +184,6 @@ export function upd(): void {
 }
 
 export function initControls(canvas: HTMLCanvasElement): void {
-  (document.getElementById('shipSel') as HTMLSelectElement).innerHTML = Object.entries(SHIPS).map(([k, s]) => `<option value="${k}">${esc(s.n)}</option>`).join('');
-  (document.getElementById('shipSel') as HTMLSelectElement).value = S.shipKey;
-  $('shipSel').addEventListener('change', (e) => { S.shipKey = (e.target as HTMLSelectElement).value; });
   document.querySelector('.scgrid')!.innerHTML = Object.entries(SCEN).map(([k, s]) => `<button data-v="${k}">${esc(s.n)}</button>`).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
 

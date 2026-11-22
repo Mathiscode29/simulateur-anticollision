@@ -39,7 +39,8 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 
 - RIPAM (règlement international pour prévenir les abordages en mer, COLREG 1972 amendé), règles 5 à 19, 35, annexe I.
 - Radar/ARPA : norme IEC 62388 et résolution OMI MSC.192(79) pour la présentation et la symbologie.
-- Manœuvrabilité : méthode MMG standard (Yasukawa & Yoshimura, J. Mar. Sci. Technol. 20:37-52, 2015). Les navires sans paramètres MMG utilisent encore un modèle de Nomoto 1er ordre (à remplacer).
+- Manœuvrabilité : méthode MMG standard (Yasukawa & Yoshimura, J. Mar. Sci. Technol. 20:37-52, 2015). **Un seul navire porteur** pour l'instant (KVLCC2) ; pas de sélecteur de navire tant qu'il n'y en a qu'un.
+- Prochain navire : porte-conteneurs KCS (230 m). Bloquant : obtenir un jeu complet de coefficients MMG publiés (piste : Yasukawa et al., J. Mar. Sci. Technol. 28:98-116, 2023, DOI 10.1007/s00773-022-00908-3, accès payant). Cibles de validation en essais libres (moyenne multi-bassins, Fr 0,26, barre 35°) : avance ≈ 2,9 L ; diamètre tactique ≈ 2,9 L sur tribord et 2,6 L sur bâbord ; vitesse en giration ≈ 0,46 U.
 - Critères OMI de manœuvrabilité : résolution MSC.137(76).
 - Grille de référence des simulateurs : DNV-ST-0033 (révision 2025).
 

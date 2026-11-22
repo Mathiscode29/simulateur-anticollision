@@ -1,11 +1,9 @@
 /**
  * Cinématique et manœuvrabilité.
  *
- * Porteur : modèle de Nomoto du 1er ordre  T·r' + r = K·δ  (r en °/s, δ en °),
- * avec K = Kp·U/L et T = Tp·L/U (U vitesse effective dans l'écoulement, souffle d'hélice compris),
- * appareil à gouverner limité à 2,5 °/s, pilote automatique PD réglé pour ζ ≈ 0,95.
- * Vitesse : 1er ordre vers la consigne du transmetteur, perte de vitesse en giration.
- * Dérive : vecteur surface + dérive au vent (perpendiculaire au cap) + courant.
+ * Porteur : modèle MMG 3 DDL (voir mmg.ts), appareil à gouverner, pilote automatique et machine.
+ * Cibles : cinématique simplifiée (giration à taux limité, vitesse du 1er ordre) ; leur dérive au vent
+ * est approchée par un coefficient de prise au vent perpendiculaire au cap, plus le courant.
  */
 import { S, type OwnShip, type Target } from '../core/state';
 import { TELE } from '../core/data';
@@ -23,7 +21,7 @@ export function nSea(p: MMGParams): number {
 /** Initialise l'état MMG du porteur à une vitesse surface donnée (kn), en ligne droite. */
 export function initOwnDynamics(o: OwnShip, stwKn: number): void {
   o.u = stwKn * MS; o.v = 0; o.r = 0; o.rot = 0; o.rud = 0; o.revUntil = 0;
-  o.n = o.ship.mmg ? (stwKn > 0 ? rpsForSpeed(o.ship.mmg, o.u) : 0) : 0;
+  o.n = stwKn > 0 ? rpsForSpeed(o.ship.mmg, o.u) : 0;
 }
 
 /** Vecteur vitesse fond (kn) pour un cap, une vitesse surface et un coefficient de prise au vent. */
@@ -45,8 +43,7 @@ export function ownWater(): Vec {
 }
 
 export function stepOwn(dt: number): void {
-  if (S.own.ship.mmg) stepOwnMMG(S.own, S.own.ship.mmg, dt);
-  else stepOwnNomoto(S.own, dt);
+  stepOwnMMG(S.own, S.own.ship.mmg, dt);
 }
 
 /**
@@ -92,34 +89,6 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
   o.vx = (f2.x * o.u + s2.x * o.v) / MS + c.x;
   o.vy = (f2.y * o.u + s2.y * o.v) / MS + c.y;
   o.x += o.vx * K2N * dt; o.y += o.vy * K2N * dt;
-}
-
-function stepOwnNomoto(o: OwnShip, dt: number): void {
-  const sh = o.ship, f = TELE[o.tele].f;
-  const Ums = Math.abs(o.stw) * MS * (o.stw >= 0 ? 1 : 0.25);
-  const wash = f > 0 ? 0.55 * f * sh.max * MS : 0;
-  const Ue = Math.max(Ums, wash, 0.05);
-  const K = (sh.Kp * Ue) / sh.L, T = (sh.Tp * sh.L) / Math.max(Ue, 0.3);
-  let rc: number;
-  if (o.ap) {
-    const a = 1.6, e = adiff(o.cmdHdg, o.hdg);
-    let b = (2 * 0.95 * Math.sqrt((K * a) / T) * T - 1) / (K * a);
-    b = clamp(b, 0, 200);
-    rc = clamp(a * (e - b * o.rot), -o.rudLim, o.rudLim);
-  } else rc = o.manRud;
-  const rr = 2.5 * dt;
-  o.rud += clamp(rc - o.rud, -rr, rr);
-  o.rot += ((K * o.rud - o.rot) / T) * dt;
-  o.u = o.stw * MS;
-  o.hdg = n360(o.hdg + o.rot * dt);
-  const tgt = f * sh.max * (1 - (f > 0 ? (0.35 * Math.abs(o.rud)) / 35 : 0));
-  let tau = tgt > o.stw && o.stw >= 0 ? sh.acc : sh.dec;
-  if (f < 0 && o.stw > 0) tau = sh.dec * 0.45;
-  if (f >= 0 && o.stw < 0) tau = sh.acc * 0.6;
-  o.stw += ((tgt - o.stw) / tau) * dt;
-  const g = gv(o.hdg, o.stw, sh.wind);
-  o.vx = g.x; o.vy = g.y;
-  o.x += g.x * K2N * dt; o.y += g.y * K2N * dt;
 }
 
 /** Cibles : giration à taux limité vers le cap ordonné, vitesse du 1er ordre. */

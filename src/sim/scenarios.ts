@@ -4,7 +4,7 @@
  * puis on place la cible pour que le mouvement relatif passe au CPA voulu. Le rôle obtenu est vérifié par roleOf.
  */
 import { S, logE, type Target, type TargetType, type Visibility } from '../core/state';
-import { SHIPS, TELE, TELE_SEA, TT } from '../core/data';
+import { DEFAULT_SHIP, SHIPS, TELE, TELE_SEA, TT } from '../core/data';
 import { K2N, brgOf, clamp, n360, p3, pick, pm, rnd, vec } from '../core/util';
 import { gv, initOwnDynamics } from './physics';
 import { pickBeh, roleOf } from './rules';
@@ -94,11 +94,11 @@ export function add(kind: Kind, Tmin: number, off: number): Target | null {
 }
 
 export function newScenario(): void {
-  const sh = SHIPS[S.shipKey], H = Math.round(rnd(0, 359));
+  const sh = SHIPS[S.shipKey] ?? SHIPS[DEFAULT_SHIP], H = Math.round(rnd(0, 359));
   S.own = { x: 0, y: 0, hdg: H, cmdHdg: H, stw: sh.max, rot: 0, rud: 0, tele: TELE_SEA, ap: true, manRud: 0, rudLim: 20, ship: sh, type: 'power', L: sh.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0 };
   initOwnDynamics(S.own, sh.max);
-  const g = sh.mmg ? (() => { const w = vec(H, sh.max), c = vec(S.env.curSet, S.env.curKn); return { x: w.x + c.x, y: w.y + c.y }; })() : gv(H, sh.max, sh.wind);
-  S.own.vx = g.x; S.own.vy = g.y;
+  const w = vec(H, sh.max), c = vec(S.env.curSet, S.env.curKn);
+  S.own.vx = w.x + c.x; S.own.vy = w.y + c.y;
   Object.assign(S, {
     t: 0, targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1,
     aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], over: false, collided: null, report: null, started: false, paused: true,

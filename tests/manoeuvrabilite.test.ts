@@ -45,12 +45,11 @@ describe('KVLCC2 (MMG) — critères OMI MSC.137(76)', () => {
 
 describe('intégration du modèle MMG dans la simulation', () => {
   it('scénario R15 avec le VLCC : pas de valeur non numérique, vitesse stable', () => {
-    S.shipKey = 'vlcc'; S.scen = 'r15'; S.env.vis = SCEN.r15.vis ?? 'good';
+    S.scen = 'r15'; S.env.vis = SCEN.r15.vis ?? 'good';
     newScenario(); S.started = true;
     for (let i = 0; i < 240 * 20; i++) simStep();
     expect(Number.isFinite(S.own.x) && Number.isFinite(S.own.hdg)).toBe(true);
     expect(S.own.stw).toBeGreaterThan(14.5);
     expect(S.own.stw).toBeLessThan(16.5);
-    S.shipKey = 'ferry';
   });
 });

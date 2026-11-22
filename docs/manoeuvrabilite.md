@@ -2,7 +2,7 @@
 
 Manœuvres normalisées simulées en eau profonde, sans vent ni courant, à la vitesse de service, comparées aux critères de la résolution OMI MSC.137(76). Fichier généré par `npm run manoeuvrabilite`.
 
-## Pétrolier VLCC 320 m (KVLCC2, modèle MMG) (`vlcc`)
+## Pétrolier VLCC 320 m (KVLCC2) (`vlcc`)
 
 Source : MMG standard method, Yasukawa & Yoshimura (2015), coefficients KVLCC2. L = 320 m, vitesse de service 15.5 kn, L/V = 40,1 s, régime allure mer 106,7 tr/min.
 

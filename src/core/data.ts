@@ -3,18 +3,14 @@ import type { Role, ShipModel, TargetType } from './state';
 import { KVLCC2 } from './ships/kvlcc2';
 
 /**
- * Navires porteurs. Modèle de Nomoto du 1er ordre adimensionnel :
- * K = Kp·U/L, T = Tp·L/U. wind = coefficient de dérive au vent (prise au vent),
- * acc/dec = constantes de temps (s) d'accélération / de décélération.
+ * Navire porteur. Un seul type pour l'instant : le pétrolier KVLCC2 (modèle MMG, coefficients publiés).
+ * Prochain navire prévu : porte-conteneurs KCS, dès qu'un jeu de coefficients publié complet est disponible.
  */
 export const SHIPS: Record<string, ShipModel> = {
-  pax: { n: "Navire d'expédition 131 m", L: 131, max: 15.5, Kp: 1.15, Tp: 1.3, wind: 0.045, acc: 100, dec: 170 },
-  ferry: { n: 'Ferry ro-pax 194 m', L: 194, max: 21, Kp: 1.05, Tp: 1.5, wind: 0.05, acc: 140, dec: 230 },
-  bulk: { n: 'Vraquier 190 m (chargé)', L: 190, max: 14, Kp: 0.85, Tp: 2.0, wind: 0.02, acc: 300, dec: 540 },
-  ptc: { n: 'Porte-conteneurs 366 m', L: 366, max: 21, Kp: 0.8, Tp: 2.3, wind: 0.055, acc: 380, dec: 660 },
-  vlcc: { n: 'Pétrolier VLCC 320 m (KVLCC2, modèle MMG)', L: 320, max: 15.5, Kp: 0, Tp: 0, wind: 0, acc: 0, dec: 0, mmg: KVLCC2,
+  vlcc: { n: 'Pétrolier VLCC 320 m (KVLCC2)', L: 320, max: 15.5, mmg: KVLCC2,
     src: 'MMG standard method, Yasukawa & Yoshimura (2015), coefficients KVLCC2' },
 };
+export const DEFAULT_SHIP = 'vlcc';
 
 /** Transmetteur d'ordres : fraction de la vitesse max. */
 export const TELE: readonly { n: string; f: number }[] = [
