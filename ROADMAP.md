@@ -26,6 +26,12 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Effet des petits fonds (squat, perte de manœuvrabilité)
 - [ ] Courant de marée variable dans l'espace et le temps
 
+## Phase 1 bis — Exercices et route
+- [x] Route prévue en rouge sur le radar, couloir d'écart, points tournants, XTE / distance et relèvement du WP
+- [x] Tenue de route dans le bilan (écart maximal, temps hors couloir, reprise de la route)
+- [x] 18 exercices sur trois niveaux (fondamentaux, situations combinées, avancé), dont rencontres après point tournant
+- [ ] Éditeur d'exercices et partage par lien (voir phase 4)
+
 ## Phase 2 — Zone réelle et DST
 - [ ] Zone du Pas-de-Calais ou d'Ouessant à partir de données libres (OpenStreetMap, coordonnées publiées des DST)
 - [ ] Côte, échos de terre, zones d'ombre radar
@@ -39,7 +45,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Mise en page poste fixe et raccourcis clavier ; palettes jour / crépuscule / nuit
 - [ ] AIS avec ses erreurs (latence, cap/vitesse faux, cibles sans AIS)
 - [ ] Confrontation à la norme d'essai IEC 62388
-- [ ] ECDIS simplifié
+- [ ] ECDIS simplifié : position en latitude / longitude, carte de la zone, isobathes et hauts-fonds, alarmes de route (données libres)
 - [ ] Interface en anglais (langue de travail des équipages internationaux)
 - [ ] Ordres à la barre à la voix en anglais SMCP (reconnaissance vocale du navigateur)
 

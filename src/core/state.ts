@@ -96,6 +96,8 @@ export interface Alert { id: string; cat: AlertCat; text: string; t0: number; ac
 
 export interface Env { windFrom: number; windKn: number; curSet: number; curKn: number; vis: Visibility; night: boolean; comp: Compliance; rain: boolean }
 export interface RainCell { x: number; y: number; r: number }
+/** Route prévue : points tournants (NM), segment actif, demi-largeur du couloir (NM) et statistiques d'écart. */
+export interface Route { wps: { x: number; y: number }[]; leg: number; xteLim: number; show: boolean; maxXte: number; tOver: number }
 
 export interface ClutterPt { b: number; r: number; s: number; t: number }
 export interface HistPt { t: number; ox: number; oy: number; p: Record<number, [number, number]> }
@@ -108,6 +110,7 @@ export interface State {
   aiAcc: number; encAcc: number; histAcc: number; spdPoor: [number, number]; shipKey: string; scen: string;
   collided: number | null; report: Report | null; env: Env; radar: RadarSettings;
   alerts: Alert[]; rainCells: RainCell[]; silencedUntil: number;
+  route: Route | null;
 }
 
 function defaultOwn(): OwnShip {
@@ -127,7 +130,7 @@ export const S: State = {
     ebl: [null, null], vrm: [null, null], eblRef: 'T', pi: [null, null, null, null], tool: 'EV1',
     cpaLim: 1, tcpaLim: 12, zone: 0, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0, trialT0: 0, palette: 'DUSK',
   },
-  alerts: [], rainCells: [], silencedUntil: 0,
+  alerts: [], rainCells: [], silencedUntil: 0, route: null,
 };
 
 /** Journal de passerelle (le plus récent en tête). */

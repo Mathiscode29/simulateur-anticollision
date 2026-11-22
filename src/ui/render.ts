@@ -24,11 +24,11 @@ let W = 0, DPR = 1;
 /** Position du curseur sur le scope (pixels CSS), null hors du scope. */
 export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
 
-interface Pal { frame: string; ppi: string; echo: string; ring: string; scale: string; lbl: string; text: string; dim: string; sym: string; head: string; danger: string; lost: string; ebl: string; eblTxt: string; trial: string; own: string; zone: string }
+interface Pal { frame: string; ppi: string; echo: string; ring: string; scale: string; lbl: string; text: string; dim: string; sym: string; head: string; danger: string; lost: string; ebl: string; eblTxt: string; trial: string; own: string; zone: string; route: string }
 export const PALETTES: Record<'DAY' | 'DUSK' | 'NIGHT', Pal> = {
-  DAY: { frame: '#d5dde4', ppi: '#0b2c4d', echo: '#ffd84a', ring: '#4f86ab', scale: '#25384a', lbl: '#a9c9e0', text: '#0d1b26', dim: '#4d6475', sym: '#33e6ff', head: '#ffffff', danger: '#ff2b2b', lost: '#ffb020', ebl: '#86ffbe', eblTxt: '#0a6b3a', trial: '#ff9f1c', own: '#ffffff', zone: '#c38bff' },
-  DUSK: { frame: '#020509', ppi: '#04182a', echo: '#ffd23f', ring: '#1f5d74', scale: '#8fb5cc', lbl: '#8fb5cc', text: '#bfe3f5', dim: '#7f9fb3', sym: '#5ff3ff', head: '#e8f4ff', danger: '#ff3b3b', lost: '#ffb020', ebl: '#7dffb0', eblTxt: '#7dffb0', trial: '#ff9f1c', own: '#e8f4ff', zone: '#b58cff' },
-  NIGHT: { frame: '#000000', ppi: '#020406', echo: '#9a7414', ring: '#152a35', scale: '#4b5e6b', lbl: '#4b5e6b', text: '#6d7d88', dim: '#4a5862', sym: '#2c8796', head: '#7b8a95', danger: '#a51616', lost: '#8a5a10', ebl: '#3c7d58', eblTxt: '#3c7d58', trial: '#8a5a10', own: '#7b8a95', zone: '#5c4a80' },
+  DAY: { frame: '#d5dde4', ppi: '#0b2c4d', echo: '#ffd84a', ring: '#4f86ab', scale: '#25384a', lbl: '#a9c9e0', text: '#0d1b26', dim: '#4d6475', sym: '#33e6ff', head: '#ffffff', danger: '#ff2b2b', lost: '#ffb020', ebl: '#86ffbe', eblTxt: '#0a6b3a', trial: '#ff9f1c', own: '#ffffff', zone: '#c38bff', route: '#ff3b30' },
+  DUSK: { frame: '#020509', ppi: '#04182a', echo: '#ffd23f', ring: '#1f5d74', scale: '#8fb5cc', lbl: '#8fb5cc', text: '#bfe3f5', dim: '#7f9fb3', sym: '#5ff3ff', head: '#e8f4ff', danger: '#ff3b3b', lost: '#ffb020', ebl: '#7dffb0', eblTxt: '#7dffb0', trial: '#ff9f1c', own: '#e8f4ff', zone: '#b58cff', route: '#ff4646' },
+  NIGHT: { frame: '#000000', ppi: '#020406', echo: '#9a7414', ring: '#152a35', scale: '#4b5e6b', lbl: '#4b5e6b', text: '#6d7d88', dim: '#4a5862', sym: '#2c8796', head: '#7b8a95', danger: '#a51616', lost: '#8a5a10', ebl: '#3c7d58', eblTxt: '#3c7d58', trial: '#8a5a10', own: '#7b8a95', zone: '#5c4a80', route: '#8a1c1c' },
 };
 
 export function initRender(canvas: HTMLCanvasElement): void {
@@ -179,6 +179,27 @@ export function draw(): void {
   if (R.zone > 0) {
     ctx.strokeStyle = pal.zone; ctx.setLineDash([2, 6]); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(ox, oy, R.zone * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // route prévue (rouge), couloir d'écart sur le segment actif, points tournants
+  const rt = S.route;
+  if (rt && rt.show) {
+    ctx.strokeStyle = pal.route; ctx.fillStyle = pal.route;
+    for (let i = 0; i < rt.wps.length - 1; i++) {
+      const a = Wp(rt.wps[i].x, rt.wps[i].y), b = Wp(rt.wps[i + 1].x, rt.wps[i + 1].y);
+      ctx.lineWidth = i === rt.leg ? 2.4 : 1.3; line(a[0], a[1], b[0], b[1]);
+    }
+    const A = rt.wps[rt.leg], B = rt.wps[rt.leg + 1], n = vec(brgOf(B.x - A.x, B.y - A.y) + 90, rt.xteLim);
+    ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    for (const sg of [1, -1]) { const a = Wp(A.x + n.x * sg, A.y + n.y * sg), b = Wp(B.x + n.x * sg, B.y + n.y * sg); line(a[0], a[1], b[0], b[1]); }
+    ctx.setLineDash([]);
+    ctx.font = `600 ${fs * 0.8}px ui-monospace,Menlo,monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    rt.wps.forEach((p, i) => {
+      if (i === 0) return;
+      const q = Wp(p.x, p.y);
+      ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(q[0], q[1], 5, 0, 7); ctx.stroke();
+      ctx.fillText(`WP${i}`, q[0] + 8, q[1] - 8);
+    });
   }
 
   // lignes parallèles indexées

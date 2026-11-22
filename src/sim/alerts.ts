@@ -11,6 +11,7 @@
  * Les alertes « événement » (entrée en zone) restent actives jusqu'à leur acquittement.
  */
 import { S, type AlertCat } from '../core/state';
+import { currentXte } from './route';
 
 export const TRACK_CAPACITY = 40;
 
@@ -31,6 +32,9 @@ export function updateAlerts(): void {
     if (tr.danger) want(w, `cpa-${tr.n}`, 'alarm', `Cible ${tr.n} : CPA/TCPA sous les limites`);
     if (tr.state === 'LOST') want(w, `lost-${tr.n}`, 'warning', `Cible ${tr.n} perdue (dernière position affichée)`);
   }
+  const xte = currentXte();
+  if (xte !== null && S.route && Math.abs(xte) > S.route.xteLim)
+    want(w, 'xte', 'caution', `Écart de route supérieur à ${S.route.xteLim} NM (${xte > 0 ? 'tribord' : 'bâbord'} de la route)`);
   if (S.tracks.length >= TRACK_CAPACITY - 2) want(w, 'capacity', 'caution', `Capacité de suivi presque atteinte (${S.tracks.length}/${TRACK_CAPACITY})`);
 
   for (const a of S.alerts) {

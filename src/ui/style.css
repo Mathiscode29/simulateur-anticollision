@@ -32,6 +32,7 @@ canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: 
 #nav > div { background: var(--pn); padding: 3px 7px }
 #nav small { display: block; color: var(--dm); font-size: 9.5px; letter-spacing: .05em }
 #nav b { font-family: ui-monospace, Menlo, monospace; font-size: 14px; font-weight: 600 }
+#nav b.over { color: var(--wn) }
 #nav .env { grid-column: 1 / -1; font-size: 11px; color: var(--dm); padding: 3px 7px }
 #alertBox { padding: 5px 8px 6px }
 .ahead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px }
@@ -82,6 +83,7 @@ table.keys td:first-child { font-family: ui-monospace, Menlo, monospace; color: 
 .kv span { color: var(--dm) } .kv b { font-family: ui-monospace, Menlo, monospace; font-weight: 500 }
 .tag { font: 600 10px ui-monospace, monospace; padding: 1px 5px; border-radius: 3px; background: var(--on); margin-left: 6px }
 .scgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px }
+.scgrid .lvl { grid-column: 1 / -1; font-size: 11px; color: var(--dm); text-transform: uppercase; letter-spacing: .06em; margin-top: 6px }
 .scgrid button { text-align: left; padding: 7px 8px; font-size: 12px; line-height: 1.25 }
 .msg { padding: 3px 0 3px 18px; position: relative; font-size: 12.5px }
 .msg:before { position: absolute; left: 2px; top: 3px }

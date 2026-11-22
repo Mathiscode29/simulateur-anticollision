@@ -13,9 +13,15 @@ Simulateur web pour s'entraîner à l'anticollision et à l'application du RIPAM
 - **Observation** : feux selon l'aspect et leur portée, marques de jour, signaux de brume.
 - **Bilan** : chaque situation est évaluée règle par règle (moment et ampleur de la manœuvre, côté, passage sur l'avant, R17, R19).
 
-## Scénarios
+## Exercices
 
-Face à face (R14), croisement non privilégié (R15/16), croisement privilégié (R17), rattrapement (R13), responsabilités réciproques (R18), visibilité réduite (R19), trafic mixte, trafic dense.
+Dix-huit exercices sur trois niveaux, chacun avec une route prévue (affichée en rouge sur le radar, écart latéral suivi dans le bilan) :
+
+- **Fondamentaux** : face à face (R14), croisement non privilégié (R15/16), croisement privilégié (R17), rattrapement (R13), responsabilités réciproques (R18), visibilité réduite (R19).
+- **Situations combinées** : changement de route au point tournant, double croisement, face à face et rattrapant, non privilégié qui ne manœuvre pas, manœuvre à contresens, trafic mixte.
+- **Avancé** : petit voilier de nuit par mer formée, flottille de chalutiers, NUC en dérive, grains et bande X, trafic dense, trafic dense en brume, changement de route en brume.
+
+Le réglage **Trafic** (discipliné, réaliste, imprévisible) règle la proportion de navires qui appliquent correctement le RIPAM, tardivement, pas du tout, ou à contresens.
 
 ## Développement
 

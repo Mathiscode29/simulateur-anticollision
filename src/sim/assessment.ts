@@ -8,6 +8,7 @@ import { ROLE_TXT } from '../core/data';
 import { K2N, adiff, brgOf, cpaOf, fMin, n360, vec } from '../core/util';
 import { SCEN } from './scenarios';
 import { roleOf } from './rules';
+import { currentXte } from './route';
 
 export function tLabel(t: Target): string {
   const tr = S.tracks.find((k) => k.tid === t.id);
@@ -144,6 +145,13 @@ export function finish(): void {
     const avg = S.spdPoor[0] / S.spdPoor[1], max = S.own.ship.max;
     if (avg > 0.75 * max) { pen += 10; global.push(['warn', `Vitesse moyenne ${avg.toFixed(1)} kn en brume (${Math.round((avg / max) * 100)} % du max) : R6 et R19b, vitesse de sécurité.`]); }
     else global.push(['ok', `Vitesse adaptée à la visibilité réduite (${avg.toFixed(1)} kn de moyenne).`]);
+  }
+  if (S.route) {
+    const r = S.route, xte = Math.abs(currentXte() ?? 0);
+    global.push(['info', `Écart de route maximal ${r.maxXte.toFixed(2)} NM (couloir ±${r.xteLim} NM).`]);
+    if (r.tOver > 60) global.push(['warn', `Hors du couloir pendant ${fMin(r.tOver)} : l'anticollision prime, mais l'écart doit rester maîtrisé (plan de traversée).`]);
+    if (xte <= r.xteLim / 2) global.push(['ok', `Route reprise : écart final ${xte.toFixed(2)} NM.`]);
+    else if (!unfinished) global.push(['warn', `Route non reprise en fin d'exercice (écart ${xte.toFixed(2)} NM) : une fois paré et clair, revenir sur la route prévue.`]);
   }
   const collided = S.collided !== null;
   if (unfinished && !collided) global.push(['info', `Exercice interrompu : ${unfinished} situation(s) encore en cours, la note ne porte que sur ce qui a été joué.`]);

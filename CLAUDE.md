@@ -18,12 +18,14 @@ src/core/   util.ts (maths, conventions), data.ts (navires, transmetteur, types 
 src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arrêt, critères OMI MSC.137(76)),
             physics.ts (porteur MMG, machine, vent/courant, cinématique des cibles), radar.ts (balayage, gain/mer/pluie, bandes X/S,
             grains, poursuite TT, zone d'acquisition, trial), alerts.ts (alertes et acquittement, sans DOM),
+            route.ts (route prévue, points tournants, écart latéral XTE),
             rules.ts (roleOf + IA des cibles), assessment.ts (suivi des situations, évaluation, rapport),
-            scenarios.ts, visual.ts (feux, marques, signaux de brume), loop.ts (pas de simulation)
+            scenarios.ts (18 exercices sur 3 niveaux, rencontres après point tournant), visual.ts (feux, marques, signaux de brume), loop.ts (pas de simulation)
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, palettes),
             controls.ts (DOM, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
-            manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar)
+            manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
+            route.test.ts (XTE, points tournants, rencontres après abattée)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243, à tenir à jour)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
 ```
@@ -35,7 +37,8 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - Langue : interface, commentaires, messages de commit et docs en **français**, vocabulaire professionnel maritime (CPA/TCPA, relèvement, aspect, abattée, privilégié/non privilégié…).
 - Unités : milles nautiques, nœuds, degrés, secondes. Repère local x = est, y = nord ; caps et relèvements de 0 à 360 dans le sens horaire depuis le nord.
 - Pas de simulation fixe de 0,25 s (`DT`), indépendant de l'affichage et de l'accélération du temps.
-- L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée.
+- L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
+- Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement.
 - Toute modification de `rules.ts` ou `assessment.ts` s'accompagne d'un test dans `tests/`.
 
 ## Références métier

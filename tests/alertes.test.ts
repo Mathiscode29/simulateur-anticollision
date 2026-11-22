@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { S } from '../src/core/state';
-import { SCEN, newScenario } from '../src/sim/scenarios';
+import { applyScenarioEnv, newScenario } from '../src/sim/scenarios';
 import { simStep } from '../src/sim/loop';
 import { ackAlert, ackAll, isUnackedDanger } from '../src/sim/alerts';
 import { ACQ_TIME, cancelTrack } from '../src/sim/radar';
 
 function start(): void {
-  S.scen = 'r15'; S.env.vis = SCEN.r15.vis ?? 'good'; S.env.comp = 'disc';
+  S.scen = 'r15'; applyScenarioEnv('r15'); S.env.comp = 'disc';
   newScenario(); S.started = true; S.radar.zone = 12; S.radar.cpaLim = 1; S.radar.tcpaLim = 30;
 }
 const run = (s: number) => { for (let i = 0; i < s * 4; i++) simStep(); };

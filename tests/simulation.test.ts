@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { S } from '../src/core/state';
 import { n360 } from '../src/core/util';
-import { SCEN, newScenario } from '../src/sim/scenarios';
+import { SCEN, applyScenarioEnv, newScenario } from '../src/sim/scenarios';
 import { simStep } from '../src/sim/loop';
 import { finish } from '../src/sim/assessment';
 
 function start(scen: string, comp: 'disc' | 'real' | 'hostile' = 'real'): void {
   S.scen = scen;
-  S.env.vis = SCEN[scen].vis ?? 'good';
+  applyScenarioEnv(scen); if (!SCEN[scen].vis) S.env.vis = 'good';
   S.env.comp = comp;
   newScenario();
   S.started = true;
@@ -22,9 +22,9 @@ describe('scénarios (exécution sans affichage)', () => {
     it(`${key} : génère des cibles et des situations à risque, sans erreur`, () => {
       start(key);
       expect(S.targets.length).toBeGreaterThan(0);
-      run(5);
-      expect(Object.keys(S.enc).length).toBeGreaterThan(0);
-      run(35);
+      run(40);
+      // sans pilotage, le porteur ne suit pas les points tournants : seules les routes droites doivent créer une situation
+      if (!SCEN[key].legs) expect(Object.keys(S.enc).length).toBeGreaterThan(0);
       finish();
       expect(S.report).not.toBeNull();
     });

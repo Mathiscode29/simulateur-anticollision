@@ -3,6 +3,7 @@ import { S } from '../core/state';
 import { stepOwn, stepT } from './physics';
 import { radarStep, estimate, rainStep, SWP } from './radar';
 import { updateAlerts } from './alerts';
+import { routeStep } from './route';
 import { aiStep } from './rules';
 import { encStep, checkCol } from './assessment';
 
@@ -18,6 +19,7 @@ function pushHist(): void {
 export function simStep(dt = DT): void {
   S.t += dt;
   stepOwn(dt);
+  routeStep(dt);
   for (const t of S.targets) stepT(t, dt);
   rainStep(dt);
   radarStep(dt);

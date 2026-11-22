@@ -2,7 +2,8 @@
 import { S, logE, type Compliance, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
 import { brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
-import { SCEN, newScenario } from '../sim/scenarios';
+import { LEVELS, SCEN, applyScenarioEnv, newScenario } from '../sim/scenarios';
+import { legData } from '../sim/route';
 import { ACQ_TIME, STABLE_TIME, SWP, acquire, cancelTrack, seaLevel, trialRemaining } from '../sim/radar';
 import { ackAlert, ackAll, sortedAlerts, TRACK_CAPACITY } from '../sim/alerts';
 import { finish } from '../sim/assessment';
@@ -72,7 +73,9 @@ const SEGS: Record<string, Seg> = {
   rainEnv: { g: () => (S.env.rain ? '1' : '0'), s: (v) => { S.env.rain = v === '1'; if (!S.env.rain) S.rainCells = []; } },
   night: { g: () => (S.env.night ? '1' : '0'), s: (v) => (S.env.night = v === '1') },
   comp: { g: () => S.env.comp, s: (v) => (S.env.comp = v as Compliance) },
-  scen: { g: () => S.scen, s: (v) => { S.scen = v; const sc = SCEN[v]; if (sc.vis) S.env.vis = sc.vis; } },
+  scen: { g: () => S.scen, s: (v) => { S.scen = v; applyScenarioEnv(v); syncEnv(); } },
+  routeShow: { g: () => (S.route?.show ? '1' : '0'), s: (v) => { if (S.route) S.route.show = v === '1'; } },
+  xteLim: { g: () => String(S.route?.xteLim ?? 1), s: (v) => { if (S.route) S.route.xteLim = +v; } },
 };
 
 let audio: AudioContext | null = null;
@@ -236,6 +239,15 @@ export function upd(): void {
   $('nRot').textContent = (o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60) + '°/min';
   $('nCmd').textContent = o.ap ? p3(o.cmdHdg) + '°' : 'manuel';
   $('nTel').textContent = `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min`;
+  if (S.route) {
+    const d = legData(S.route, o.x, o.y), xb = $('nXte');
+    xb.textContent = `${Math.abs(d.xte).toFixed(2)} NM ${Math.abs(d.xte) < 0.005 ? '' : d.xte > 0 ? 'Td' : 'Bd'}`;
+    xb.classList.toggle('over', Math.abs(d.xte) > S.route.xteLim);
+    const nl = S.route.wps.length - 1;
+    $('nLeg').textContent = nl > 1 ? `${p3(d.crs)}° · ${S.route.leg + 1}/${nl}` : `${p3(d.crs)}°`;
+    $('nDtw').textContent = `${d.dtw.toFixed(1)} NM`;
+    $('nBtw').textContent = `${p3(d.btw)}°`;
+  }
   $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'}${e.rain ? ' · Grains' : ''} · ${SCEN[S.scen].n}`;
   document.querySelectorAll<HTMLElement>('[data-seg]').forEach((sg) => {
     const k = SEGS[sg.dataset.seg!];
@@ -300,7 +312,8 @@ export function upd(): void {
 }
 
 export function initControls(canvas: HTMLCanvasElement): void {
-  document.querySelector('.scgrid')!.innerHTML = Object.entries(SCEN).map(([k, s]) => `<button data-v="${k}">${esc(s.n)}</button>`).join('');
+  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
+    + Object.entries(SCEN).filter(([, s]) => s.lvl === l).map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('')).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
   setPalette(R().palette);
 
