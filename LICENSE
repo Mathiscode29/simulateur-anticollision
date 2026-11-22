@@ -6,7 +6,13 @@ totale ou partielle, en dehors de la consultation du dépôt et de l'utilisation
 publié en ligne, est interdite sans l'autorisation écrite préalable de l'auteur.
 
 Les données publiques de référence citées dans le code (coefficients du navire KVLCC2 publiés par
-Yasukawa et Yoshimura, 2015) restent la propriété de leurs auteurs respectifs.
+Yasukawa et Yoshimura, 2015 ; positions du dispositif de séparation du trafic publiées par l'OMI) restent
+la propriété de leurs auteurs respectifs.
+
+Données tierces sous licence propre : le trait de côte du Pas-de-Calais (fichier
+src/core/charts/pasdecalais-land.ts) est extrait d'OpenStreetMap. © contributeurs OpenStreetMap,
+données disponibles sous la licence Open Database License (ODbL) 1.0 : https://opendatacommons.org/licenses/odbl/
+Ce fichier, et lui seul, reste soumis à l'ODbL ; la réserve de droits ci-dessus ne s'y applique pas.
 
 All rights reserved. No license is granted to copy, modify or distribute this work without the
 prior written permission of the author.

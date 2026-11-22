@@ -1,4 +1,4 @@
-/** Interface : commandes passerelle, réglages radar, alertes, table des cibles, bilan, clavier et souris. */
+/** Interface : commandes passerelle, réglages radar et ECDIS, vues, alertes, table des cibles, bilan, clavier et souris. */
 import { S, logE, type Compliance, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
 import { brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
@@ -9,6 +9,19 @@ import { ackAlert, ackAll, sortedAlerts, TRACK_CAPACITY } from '../sim/alerts';
 import { finish } from '../sim/assessment';
 import { visual } from '../sim/visual';
 import { cursor, geo, resetTM } from './render';
+import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
+import { checkRoute, depthAt, tssAt } from '../sim/chart';
+import { fmtLat, fmtLon, toLL } from '../core/geo';
+import { aisAssociated } from '../sim/ais';
+
+/** Vue affichée : la simulation tourne quelle que soit la vue. */
+export type View = 'radar' | 'ecdis' | 'split';
+export let currentView: View = 'radar';
+function setView(v: View): void {
+  currentView = v;
+  document.body.classList.remove('view-radar', 'view-ecdis', 'view-split');
+  document.body.classList.add('view-' + v);
+}
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const $in = (id: string) => document.getElementById(id) as HTMLInputElement;
@@ -76,7 +89,21 @@ const SEGS: Record<string, Seg> = {
   scen: { g: () => S.scen, s: (v) => { S.scen = v; applyScenarioEnv(v); syncEnv(); } },
   routeShow: { g: () => (S.route?.show ? '1' : '0'), s: (v) => { if (S.route) S.route.show = v === '1'; } },
   xteLim: { g: () => String(S.route?.xteLim ?? 1), s: (v) => { if (S.route) S.route.xteLim = +v; } },
+  view: { g: () => currentView, s: (v) => setView(v as View) },
+  ecSafety: { g: () => String(S.ecdis.safety), s: (v) => { S.ecdis.safety = +v; logE(`ECDIS : contour de sécurité ${v} m`); } },
+  ecLook: { g: () => String(S.ecdis.look), s: (v) => (S.ecdis.look = +v) },
+  ecTool: { g: () => S.ecdis.tool, s: (v) => (S.ecdis.tool = v as typeof S.ecdis.tool) },
+  aisRadar: { g: () => (S.ecdis.aisRadar ? '1' : '0'), s: (v) => (S.ecdis.aisRadar = v === '1') },
 };
+
+function routeCheck(): void {
+  const r = S.route;
+  if (!r || r.wps.length < 2) { S.ecdis.routeIssues = []; return; }
+  S.ecdis.routeIssues = checkRoute(r.wps.slice(r.leg), S.ecdis.safety).map((i) => ({ ...i, leg: i.leg + r.leg }));
+  const n = S.ecdis.routeIssues.length;
+  if (n) logE(`Vérification de route : ${n} point(s) sous le contour de sécurité (${S.ecdis.safety} m), segment(s) ${[...new Set(S.ecdis.routeIssues.map((i) => i.leg))].join(', ')}`, 'warn');
+  else logE(`Vérification de route : aucun danger sous le contour de sécurité (${S.ecdis.safety} m)`);
+}
 
 let audio: AudioContext | null = null;
 function ensureAudio(): void {
@@ -171,6 +198,21 @@ const ACT: Record<string, (v: string) => void> = {
   finish() { if (!S.over && S.started) finish(); },
   ackAll() { ackAll(); },
   silence() { S.silencedUntil = performance.now() + 30000; },
+  ecZoom(v) { ecZoom(+v); },
+  ecCenter() { centreOnOwn(); },
+  ecClr() { S.ecdis.ebl = null; S.ecdis.vrm = null; },
+  layer(v) { const L = S.ecdis.layers as Record<string, boolean>; L[v] = !L[v]; },
+  routeNew() {
+    const o = S.own;
+    S.route = { wps: [{ x: o.x, y: o.y }], leg: 0, xteLim: S.route?.xteLim ?? 1, show: true, maxXte: 0, tOver: 0 };
+    S.ecdis.tool = 'ROUTE'; S.ecdis.routeIssues = [];
+    logE('Nouvelle route : cliquez sur la carte ECDIS pour poser les points tournants');
+  },
+  routeUndo() {
+    const r = S.route;
+    if (r && r.wps.length > Math.max(1, r.leg + 2)) { r.wps.pop(); routeCheck(); }
+  },
+  routeCheck() { routeCheck(); },
 };
 
 const BFT = [1, 4, 7, 11, 17, 22, 28, 34, 41, 48, 56, 64];
@@ -239,7 +281,7 @@ export function upd(): void {
   $('nRot').textContent = (o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60) + '°/min';
   $('nCmd').textContent = o.ap ? p3(o.cmdHdg) + '°' : 'manuel';
   $('nTel').textContent = `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min`;
-  if (S.route) {
+  if (S.route && S.route.wps.length > 1) {
     const d = legData(S.route, o.x, o.y), xb = $('nXte');
     xb.textContent = `${Math.abs(d.xte).toFixed(2)} NM ${Math.abs(d.xte) < 0.005 ? '' : d.xte > 0 ? 'Td' : 'Bd'}`;
     xb.classList.toggle('over', Math.abs(d.xte) > S.route.xteLim);
@@ -248,6 +290,20 @@ export function upd(): void {
     $('nDtw').textContent = `${d.dtw.toFixed(1)} NM`;
     $('nBtw').textContent = `${p3(d.btw)}°`;
   }
+  const ll = toLL(o.x, o.y), dep = depthAt(o.x, o.y), zone = tssAt(o.x, o.y);
+  $('nPos').textContent = `${fmtLat(ll.lat)} ${fmtLon(ll.lon)}`;
+  const db = $('nDep');
+  db.textContent = dep > 200 ? '> 200 m' : `${dep.toFixed(0)} m · ${(dep - o.ship.mmg.d).toFixed(0)} m s/q`;
+  db.classList.toggle('over', dep < S.ecdis.safety);
+  $('nZone').textContent = zone.name;
+  $('ecRng').textContent = ecView.range + ' NM';
+  $('ecDraft').textContent = `tirant d'eau ${o.ship.mmg.d.toFixed(1)} m`;
+  document.querySelectorAll<HTMLButtonElement>('#ecLayers button').forEach((b) => b.classList.toggle('on', (S.ecdis.layers as Record<string, boolean>)[b.dataset.v!]));
+  const info = pickedInfo().filter(Boolean);
+  const pickHtml = info.length ? info.map((s, i) => (i ? `<div>${esc(s)}</div>` : `<b>${esc(s)}</b>`)).join('') : '<span class="dim">Outil Info : cliquez sur une cible AIS, une piste radar, une bouée ou le navire.</span>';
+  if ($('ecPick').innerHTML !== pickHtml) $('ecPick').innerHTML = pickHtml;
+  const rt = S.route;
+  $('ecRouteTxt').textContent = rt ? `${rt.wps.length} point(s) tournant(s), segment actif ${rt.leg + 1}${S.ecdis.routeIssues.length ? ` · ${S.ecdis.routeIssues.length} danger(s) relevé(s)` : ''}${S.ecdis.tool === 'ROUTE' ? ' · outil tracé actif' : ''}` : '';
   $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'}${e.rain ? ' · Grains' : ''} · ${SCEN[S.scen].n}`;
   document.querySelectorAll<HTMLElement>('[data-seg]').forEach((sg) => {
     const k = SEGS[sg.dataset.seg!];
@@ -279,11 +335,11 @@ export function upd(): void {
   if (!S.tracks.length) {
     $('arpaTable').innerHTML = "<p class=\"dim\">Aucune cible suivie. Cliquez sur un écho (ou touche A sous le curseur), ou activez une zone d'acquisition (onglet Radar).</p>";
   } else {
-    let h = `<table class="t"><tr><th>N°</th><th>Dist</th><th>Rlv</th><th>CPA</th><th>TCPA</th><th>BCR</th><th>Route</th><th>Vit</th>${Rs.trial ? '<th>CPA ess.</th>' : ''}</tr>`;
+    let h = `<table class="t"><tr><th>N°</th><th>Src</th><th>Dist</th><th>Rlv</th><th>CPA</th><th>TCPA</th><th>BCR</th><th>Route</th><th>Vit</th>${Rs.trial ? '<th>CPA ess.</th>' : ''}</tr>`;
     for (const tr of [...S.tracks].sort((a, b) => a.n - b.n)) {
       if (!tr.est) continue;
       const ok = tr.state === 'TRK';
-      h += `<tr data-n="${tr.n}" class="${S.sel === tr.n ? 'sel' : ''} ${tr.danger ? 'dg' : ''}"><td>${tr.n}${tr.state === 'ACQ' ? '…' : tr.state === 'LOST' ? ' ⚠' : ''}</td><td>${tr.range.toFixed(1)}</td><td>${p3(tr.brg)}</td>`
+      h += `<tr data-n="${tr.n}" class="${S.sel === tr.n ? 'sel' : ''} ${tr.danger ? 'dg' : ''}"><td>${tr.n}${tr.state === 'ACQ' ? '…' : tr.state === 'LOST' ? ' ⚠' : ''}</td><td>${aisAssociated(tr) ? 'R+A' : 'RAD'}</td><td>${tr.range.toFixed(1)}</td><td>${p3(tr.brg)}</td>`
         + `<td>${ok ? tr.cpa.toFixed(2) : '—'}</td><td>${ok && isFinite(tr.tcpa) ? (tr.tcpa / 60).toFixed(1) : '—'}</td>`
         + `<td>${ok && tr.bcr !== null ? (tr.bcr >= 0 ? 'Av ' : 'Ar ') + Math.abs(tr.bcr).toFixed(1) : '—'}</td>`
         + `<td>${ok ? p3(tr.crs) : '—'}</td><td>${ok ? tr.spd.toFixed(1) : '—'}</td>`
@@ -296,7 +352,7 @@ export function upd(): void {
     const t = S.targets.find((x) => x.id === tr.tid), ok = tr.state === 'TRK', age = S.t - tr.t0;
     const st = tr.state === 'ACQ' ? 'ACQUISITION' : tr.state === 'LOST' ? 'PERDUE' : age < STABLE_TIME ? 'TENDANCE' : 'PRÉDICTION';
     $('selCard').innerHTML = `<div class="card"><b>Cible ${tr.n}</b><span class="tag">${st}</span>
-    <div class="kv"><span>Source</span><b>Radar (poursuite TT), suivie depuis ${fT(age)}</b>
+    <div class="kv"><span>Source</span><b>Radar (poursuite TT), suivie depuis ${fT(age)}${t && aisAssociated(tr) && t.ais ? ` · associée AIS ${esc(t.ais.name)} (MMSI ${t.ais.mmsi})` : ''}</b>
     <span>Distance / relèvement</span><b>${tr.range.toFixed(2)} NM / ${tr.brg.toFixed(1)}°T</b>
     <span>CPA / TCPA</span><b>${ok ? tr.cpa.toFixed(2) + ' NM / ' + (isFinite(tr.tcpa) ? fMin(tr.tcpa) : '—') : `disponible après ${ACQ_TIME} s`}</b>
     <span>Route / vitesse vraies</span><b>${ok ? p3(tr.crs) + '° / ' + tr.spd.toFixed(1) + ' kn (' + (Rs.stab === 'GND' ? 'fond' : 'surface') + ')' : '…'}</b>
@@ -311,8 +367,38 @@ export function upd(): void {
   renderReport();
 }
 
-export function initControls(canvas: HTMLCanvasElement): void {
-  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
+/** Souris sur la carte ECDIS : glisser pour déplacer, molette pour l'échelle, clic selon l'outil. */
+function initEcdisInput(ec: HTMLCanvasElement): void {
+  let down: { x: number; y: number; moved: boolean } | null = null;
+  const pos = (ev: PointerEvent | WheelEvent) => { const rc = ec.getBoundingClientRect(); return { x: ev.clientX - rc.left, y: ev.clientY - rc.top }; };
+  ec.addEventListener('pointerdown', (ev) => { const p = pos(ev); down = { ...p, moved: false }; ec.setPointerCapture(ev.pointerId); });
+  ec.addEventListener('pointermove', (ev) => {
+    const p = pos(ev); ecur.x = p.x; ecur.y = p.y;
+    if (down && (down.moved || Math.hypot(p.x - down.x, p.y - down.y) > 5)) { pan(p.x - down.x, p.y - down.y); down = { ...p, moved: true }; }
+  });
+  ec.addEventListener('pointerleave', () => { ecur.x = null; ecur.y = null; });
+  ec.addEventListener('pointerup', (ev) => {
+    const p = pos(ev), d = down; down = null;
+    if (!d || d.moved) return;
+    const E = S.ecdis, w = fromScr(p.x, p.y), o = S.own;
+    if (E.tool === 'INFO') setPicked(ecPickAt(p.x, p.y));
+    else if (E.tool === 'EBL') { E.ebl = brgOf(w.x - o.x, w.y - o.y); E.vrm = Math.hypot(w.x - o.x, w.y - o.y); }
+    else if (E.tool === 'ROUTE') {
+      if (scrOnLand(p.x, p.y)) { logE('Point tournant refusé : à terre', 'warn'); return; }
+      if (!S.route) S.route = { wps: [{ x: o.x, y: o.y }], leg: 0, xteLim: 1, show: true, maxXte: 0, tOver: 0 };
+      S.route.wps.push(w);
+      const ll = toLL(w.x, w.y);
+      logE(`WP${S.route.wps.length - 1} ajouté : ${fmtLat(ll.lat)} ${fmtLon(ll.lon)}`);
+      routeCheck();
+    }
+    upd();
+  });
+  ec.addEventListener('wheel', (ev) => { ev.preventDefault(); ecZoom(ev.deltaY > 0 ? 1 : -1); upd(); }, { passive: false });
+}
+
+export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): void {
+  initEcdisInput(ec);
+  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
     + Object.entries(SCEN).filter(([, s]) => s.lvl === l).map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('')).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
   setPalette(R().palette);
@@ -399,6 +485,8 @@ export function initControls(canvas: HTMLCanvasElement): void {
     else if (k === 'n' || k === 'N') { const seq: RadarSettings['orient'][] = R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU']; setOrient(seq[(seq.indexOf(R().orient) + 1) % seq.length]); }
     else if (k === 't' || k === 'T') setTrial(!R().trial);
     else if (k === 'Enter') ackAll();
+    else if (k === 'v' || k === 'V') setView(currentView === 'radar' ? 'ecdis' : currentView === 'ecdis' ? 'split' : 'radar');
+    else if (k === 'c' || k === 'C') centreOnOwn();
     else done = false;
     if (done) { ev.preventDefault(); upd(); }
   });

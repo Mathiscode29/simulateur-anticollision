@@ -39,7 +39,7 @@ export function legData(r: Route, px: number, py: number) {
 
 export function routeStep(dt: number): void {
   const r = S.route;
-  if (!r) return;
+  if (!r || r.wps.length < 2) return;
   let d = legData(r, S.own.x, S.own.y);
   if (r.leg < r.wps.length - 2 && (d.dtw < ARRIVAL || d.along > d.len)) {
     r.leg++;
@@ -52,5 +52,5 @@ export function routeStep(dt: number): void {
 
 /** Écart latéral courant (NM), null sans route. */
 export function currentXte(): number | null {
-  return S.route ? legData(S.route, S.own.x, S.own.y).xte : null;
+  return S.route && S.route.wps.length > 1 ? legData(S.route, S.own.x, S.own.y).xte : null;
 }

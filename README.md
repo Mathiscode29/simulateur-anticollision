@@ -1,4 +1,4 @@
-# Simulateur anticollision — Radar ARPA
+# Simulateur anticollision — Radar ARPA et ECDIS
 
 Simulateur web pour s'entraîner à l'anticollision et à l'application du RIPAM, pensé pour les élèves officiers et officiers de la marine marchande. Il fonctionne dans le navigateur, de préférence sur ordinateur.
 
@@ -11,15 +11,21 @@ Simulateur web pour s'entraîner à l'anticollision et à l'application du RIPAM
 - **Radar / ARPA** (présentation selon MSC.192(79) et SN.1/Circ.243, voir [docs/conformite-radar.md](docs/conformite-radar.md)) : bandes X et S, gain, anti-clutter mer et pluie, grains, mouvement relatif ou vrai, décentrage, deux EBL/VRM, lignes parallèles indexées, curseur, poursuite de 40 cibles avec zone d'acquisition, CPA/TCPA, BCR/BCT, positions passées, manœuvre d'essai avec décompte, alertes avec acquittement et signal sonore, palettes jour / crépuscule / nuit. Utilisation à la souris et au clavier.
 - **Trafic** : les autres navires appliquent les règles 13 à 19, plus ou moins bien selon le niveau choisi (discipliné, réaliste, imprévisible). Navires en pêche, à voile, non maîtres de leur manœuvre, à capacité de manœuvre restreinte.
 - **Observation** : feux selon l'aspect et leur portée, marques de jour, signaux de brume.
-- **Bilan** : chaque situation est évaluée règle par règle (moment et ampleur de la manœuvre, côté, passage sur l'avant, R17, R19).
+- **ECDIS** (vue séparée ou côte à côte avec le radar, sans interrompre la simulation, touche V) : position WGS 84, carte nord en haut en mouvement vrai, couleurs inspirées de S-52 selon la palette, isobathes et contour de sécurité, alarme de franchissement anticipé du contour de sécurité (visuelle et sonore), DST en magenta, bouées et bateaux-feux, cibles AIS et pistes ARPA, EBL/VRM, tracé et vérification de route.
+- **AIS** : classes A et B, cadence des messages selon la vitesse, navires sans AIS, association avec les pistes radar (priorité AIS), superposition au radar.
+- **Côte au radar** : échos de côte et de bouées, masquage de tout ce qui est derrière la terre.
+- **Bilan** : chaque situation est évaluée règle par règle (moment et ampleur de la manœuvre, côté, passage sur l'avant, R17, R19), plus la règle 10 dans le DST (sens de circulation, traversée à angle droit, zone de séparation, zone côtière) et l'échouement.
 
 ## Exercices
 
-Dix-huit exercices sur trois niveaux, chacun avec une route prévue (affichée en rouge sur le radar, écart latéral suivi dans le bilan) :
+Vingt et un exercices sur quatre niveaux, chacun avec une route prévue (affichée en rouge sur le radar, écart latéral suivi dans le bilan) :
 
 - **Fondamentaux** : face à face (R14), croisement non privilégié (R15/16), croisement privilégié (R17), rattrapement (R13), responsabilités réciproques (R18), visibilité réduite (R19).
 - **Situations combinées** : changement de route au point tournant, double croisement, face à face et rattrapant, non privilégié qui ne manœuvre pas, manœuvre à contresens, trafic mixte.
 - **Avancé** : petit voilier de nuit par mer formée, flottille de chalutiers, NUC en dérive, grains et bande X, trafic dense, trafic dense en brume, changement de route en brume.
+- **Pas-de-Calais (DST, règle 10)** : traversée du DST à angle droit dans un trafic dense, rattrapement en brume dans la voie montante entre le Colbart et le Varne, navire à contresens dans la voie descendante.
+
+La carte du Pas-de-Calais est **schématique et non destinée à la navigation** : trait de côte © contributeurs OpenStreetMap (ODbL), dispositif de séparation du trafic d'après les positions officielles de l'OMI, bancs et isobathes modélisés. Sources et limites : [docs/carte-pas-de-calais.md](docs/carte-pas-de-calais.md).
 
 Le réglage **Trafic** (discipliné, réaliste, imprévisible) règle la proportion de navires qui appliquent correctement le RIPAM, tardivement, pas du tout, ou à contresens.
 
@@ -38,4 +44,4 @@ Architecture, conventions et références : [CLAUDE.md](CLAUDE.md). Suite du pro
 
 ## Droits
 
-© 2026 Mathis THOMAS — tous droits réservés. Voir [LICENSE](LICENSE).
+© 2026 Mathis THOMAS — tous droits réservés. Voir [LICENSE](LICENSE). Le trait de côte extrait d'OpenStreetMap reste sous licence ODbL (© contributeurs OpenStreetMap).

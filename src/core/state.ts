@@ -30,11 +30,19 @@ export interface Echo { x: number; y: number; b: number; r: number; t: number }
 
 export interface TargetAI { state: 'transit' | 'avoid'; role: Role | null; cool: number; want?: number; actT?: number; info?: string; done?: string }
 
+/** Dernier message de position AIS reçu (classe A ou B). */
+export interface AisReport { t: number; x: number; y: number; sog: number; cog: number; hdg: number }
+/** Transpondeur AIS d'une cible : identifiant, classe, émission active ou non, prochaine émission. */
+export interface Ais { mmsi: number; name: string; cls: 'A' | 'B'; on: boolean; next: number; rep: AisReport | null; status: string }
+
 export interface Target {
   id: number; type: TargetType; name: string; L: number;
   x: number; y: number; hdg: number; stw: number; cmdHdg: number; cmdStw: number; baseHdg: number; baseStw: number; rot: number;
   maxRot: number; tau: number; acc: number; dec: number; wind: number; rcs: number;
   beh: Behaviour; ai: TargetAI; echo: Echo | null; nextFish: number; vx: number; vy: number;
+  ais: Ais | null;
+  /** Navire qui suit une voie du DST : voie, sens (1 = sens réglementaire, −1 = contresens), décalage latéral (NM). */
+  lane?: 'NE' | 'SW'; laneDir?: 1 | -1; laneOff?: number;
 }
 
 export interface TrialResult { cpa: number; tcpa: number; px: number; py: number; rvx: number; rvy: number }
@@ -60,8 +68,30 @@ export interface Encounter {
   res?: { pen: number; m: Msg[] };
 }
 
+/** Situation du porteur vis-à-vis du DST (règle 10) : temps cumulés (s) et traversées. */
+export interface TssWatch {
+  kind: 'none' | 'laneNE' | 'laneSW' | 'sep' | 'itz'; t: number;
+  inLane: number; wrong: number; oblique: number; sep: number; itz: number;
+  crossings: { lane: string; maxDev: number; t: number }[];
+  cur: { lane: string; maxDev: number; t: number } | null;
+}
+
+/** Réglages ECDIS : contour de sécurité, anticipation, outils et couches. */
+export interface EcdisSettings {
+  safety: number; look: number;
+  ebl: number | null; vrm: number | null;
+  tool: 'INFO' | 'EBL' | 'ROUTE';
+  layers: { tss: boolean; depth: boolean; names: boolean; ais: boolean; arpa: boolean };
+  /** Symboles AIS superposés au radar. */
+  aisRadar: boolean;
+  routeIssues: { leg: number; x: number; y: number; depth: number }[];
+}
+
+/** Échos de côte : distance d'entrée (r0) et de sortie (r1) par rayon de 0,5°, instant du dernier éclairement. */
+export interface CoastRadar { ox: number; oy: number; r0: Float32Array; r1: Float32Array; t: Float32Array; band: Float32Array }
+
 export interface ReportItem { label: string; name: string; L: number; role: string; msgs: Msg[]; other: string }
-export interface Report { score: number; grade: string; scen: string; duration: number; global: Msg[]; items: ReportItem[]; collided: boolean }
+export interface Report { score: number; grade: string; scen: string; duration: number; global: Msg[]; items: ReportItem[]; collided: boolean; grounded?: boolean }
 
 export interface RadarSettings {
   range: number; orient: 'HU' | 'NU' | 'CU'; cuRef: number;
@@ -111,6 +141,22 @@ export interface State {
   collided: number | null; report: Report | null; env: Env; radar: RadarSettings;
   alerts: Alert[]; rainCells: RainCell[]; silencedUntil: number;
   route: Route | null;
+  /** Carte courante (« open » = large sans terre, « pdc » = Pas-de-Calais). */
+  chart: 'open' | 'pdc';
+  coast: CoastRadar | null;
+  /** Dernier éclairement radar des bouées et bateaux-feux (par identifiant). */
+  markEcho: Record<string, number>;
+  /** Trace du porteur (toutes les 10 s) pour l'ECDIS. */
+  ownTrack: { t: number; x: number; y: number }[];
+  tss: TssWatch;
+  ecdis: EcdisSettings;
+  grounded: boolean;
+  /** Alertes de condition de navigation (ECDIS, DST) recalculées chaque seconde. */
+  navAlerts: { id: string; cat: AlertCat; text: string }[];
+}
+
+export function newTssWatch(): TssWatch {
+  return { kind: 'none', t: 0, inLane: 0, wrong: 0, oblique: 0, sep: 0, itz: 0, crossings: [], cur: null };
 }
 
 function defaultOwn(): OwnShip {
@@ -131,6 +177,11 @@ export const S: State = {
     cpaLim: 1, tcpaLim: 12, zone: 0, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0, trialT0: 0, palette: 'DUSK',
   },
   alerts: [], rainCells: [], silencedUntil: 0, route: null,
+  chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [],
+  ecdis: {
+    safety: 30, look: 6, ebl: null, vrm: null, tool: 'INFO',
+    layers: { tss: true, depth: true, names: true, ais: true, arpa: true }, aisRadar: true, routeIssues: [],
+  },
 };
 
 /** Journal de passerelle (le plus récent en tête). */

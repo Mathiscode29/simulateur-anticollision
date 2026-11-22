@@ -10,6 +10,8 @@
  *    cible dangereuse, cercle barré pour une cible perdue, carré par ses coins pour la cible sélectionnée,
  *    points équidistants en temps pour les positions passées ;
  *  - manœuvre d'essai signalée par un grand « T » et un décompte ;
+ *  - échos de côte (bandes depuis le trait de côte, masquage au-delà), bouées et bateaux-feux ;
+ *  - cibles AIS en superposition (triangles), priorité à l'AIS pour une piste associée (MSC.192(79) 5.33) ;
  *  - palettes jour / crépuscule / nuit.
  */
 import { S } from '../core/state';
@@ -18,6 +20,9 @@ import { D2R, adiff, brgOf, clamp, n360, vec } from '../core/util';
 import { ownWater } from '../sim/physics';
 import { SWP, seaLevel, trialRemaining, trueV } from '../sim/radar';
 import { isUnackedDanger, isUnackedLost } from '../sim/alerts';
+import { CHART, NRAYS } from '../sim/chart';
+import { fmtLat, fmtLon, toLL } from '../core/geo';
+import { aisAssociated, aisLost, aisPos } from '../sim/ais';
 
 let cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
 let W = 0, DPR = 1;
@@ -99,6 +104,13 @@ function line(x1: number, y1: number, x2: number, y2: number): void {
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
 }
 
+/** Triangle AIS (SN.1/Circ.243) : sommet dans la direction donnée (déjà corrigée de l'orientation). */
+function aisTriangle(q: [number, number], dir: number, s: number): void {
+  ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate(dir * D2R);
+  ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(s * 0.5, s * 0.6); ctx.lineTo(-s * 0.5, s * 0.6); ctx.closePath(); ctx.stroke();
+  ctx.restore();
+}
+
 /** Lecture curseur : relèvement vrai et distance depuis le porteur. */
 export function cursorReadout(): { b: number; r: number } | null {
   if (cursor.x === null || cursor.y === null) return null;
@@ -153,6 +165,37 @@ export function draw(): void {
     }
   }
 
+  // côte : bande d'écho depuis le premier point de terre, sur la largeur du faisceau
+  const co = S.coast;
+  if (co) {
+    ctx.fillStyle = pal.echo;
+    const half = 0.25 + (R.band === 'X' ? 0.5 : 0.9), maxR = R.range * 1.5 + 2;
+    for (let i = 0; i < NRAYS; i++) {
+      const r0 = co.r0[i];
+      if (r0 > maxR) continue;
+      const ag = S.t - co.t[i];
+      if (ag > SWP * 1.05 || ag < 0) continue;
+      const r1 = Math.min(co.r1[i], r0 + co.band[i]), b = i * 0.5;
+      ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.3, 0.95);
+      const a1 = vec(b - half, r0), a2 = vec(b + half, r0), b1 = vec(b - half, r1), b2 = vec(b + half, r1);
+      const q1 = Wp(co.ox + a1.x, co.oy + a1.y), q2 = Wp(co.ox + a2.x, co.oy + a2.y), q3 = Wp(co.ox + b2.x, co.oy + b2.y), q4 = Wp(co.ox + b1.x, co.oy + b1.y);
+      ctx.beginPath(); ctx.moveTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.lineTo(q4[0], q4[1]); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // bouées et bateaux-feux
+  ctx.fillStyle = pal.echo;
+  for (const m of CHART.marks) {
+    const t0 = S.markEcho[m.id];
+    if (t0 === undefined) continue;
+    const ag = S.t - t0;
+    if (ag > SWP * 1.05) continue;
+    const q = Wp(m.x, m.y), wd = Math.max(3, Math.hypot(m.x - o.x, m.y - o.y) * k * (R.band === 'X' ? 1 : 1.8) * D2R), dp = m.kind === 'lv' ? 3.5 : 2.5;
+    ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.25, 1);
+    ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate((brgOf(m.x - o.x, m.y - o.y) - rot) * D2R); ctx.fillRect(-wd / 2, -dp / 2, wd, dp); ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+
   // échos
   ctx.fillStyle = pal.echo;
   const beam = (R.band === 'X' ? 1.0 : 1.8) * D2R;
@@ -183,7 +226,7 @@ export function draw(): void {
 
   // route prévue (rouge), couloir d'écart sur le segment actif, points tournants
   const rt = S.route;
-  if (rt && rt.show) {
+  if (rt && rt.show && rt.wps.length > 1) {
     ctx.strokeStyle = pal.route; ctx.fillStyle = pal.route;
     for (let i = 0; i < rt.wps.length - 1; i++) {
       const a = Wp(rt.wps[i].x, rt.wps[i].y), b = Wp(rt.wps[i + 1].x, rt.wps[i + 1].y);
@@ -245,10 +288,25 @@ export function draw(): void {
     ctx.setLineDash([]);
   }
 
+  // cibles AIS (triangles) non associées à une piste
+  const assoc = new Map<number, number>();
+  if (S.ecdis.aisRadar) {
+    for (const tr of S.tracks) { const t = aisAssociated(tr); if (t) assoc.set(t.id, tr.n); }
+    ctx.strokeStyle = pal.sym; ctx.lineWidth = 1.2;
+    for (const t of S.targets) {
+      if (!t.ais?.rep || assoc.has(t.id)) continue;
+      const p = aisPos(t)!, q = Wp(p.x, p.y);
+      if (Math.hypot(q[0] - cx, q[1] - cy) > Rr) continue;
+      aisTriangle(q, t.ais.rep.hdg - rot, sz * 1.25);
+      if (aisLost(t)) { line(q[0] - sz, q[1] - sz, q[0] + sz, q[1] + sz); line(q[0] - sz, q[1] + sz, q[0] + sz, q[1] - sz); }
+    }
+  }
+
   // cibles suivies
   ctx.font = `600 ${fs * 0.85}px ui-monospace,Menlo,monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   for (const tr of S.tracks) {
     if (!tr.est) continue;
+    const isAis = [...assoc.values()].includes(tr.n);
     const q = Wp(tr.est.x, tr.est.y);
     if (Math.hypot(q[0] - cx, q[1] - cy) > Rr + 20) continue;
     const dangerFlash = tr.danger && isUnackedDanger(tr.n), lostFlash = tr.state === 'LOST' && isUnackedLost(tr.n);
@@ -277,6 +335,11 @@ export function draw(): void {
         const autoUnack = tr.auto;
         ctx.strokeStyle = autoUnack ? pal.danger : col; ctx.lineWidth = autoUnack ? 2.5 : 1.5;
         for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(q[0], q[1], sz + 1, (i * Math.PI) / 2 + 0.25, (i * Math.PI) / 2 + Math.PI / 2 - 0.25); ctx.stroke(); }
+      } else if (isAis) {
+        // piste associée à une cible AIS : symbole AIS activé (priorité AIS)
+        const t = S.targets.find((x) => x.id === tr.tid);
+        ctx.lineWidth = tr.danger ? 3 : 1.5;
+        aisTriangle(q, (t?.ais?.rep?.hdg ?? tr.crs) - rot, sz * 1.5);
       } else {
         ctx.lineWidth = tr.danger ? 3 : 1.5;
         ctx.beginPath(); ctx.arc(q[0], q[1], sz, 0, 7); ctx.stroke();
@@ -363,6 +426,7 @@ export function draw(): void {
     `STAB ${R.stab === 'GND' ? 'SOL (GNSS)' : 'EAU (LOCH)'}`,
     `SILLAGES ${R.trail === 'OFF' ? 'OFF' : (R.trail === 'REL' ? 'REL ' : 'VRAIS ') + R.trailMin + ' min'}`,
     `CPA ${R.cpaLim} NM  TCPA ${R.tcpaLim} min`,
+    `AIS ${S.ecdis.aisRadar ? 'SUPERPOSÉ' : 'OFF'}`,
   ];
   ctx.textAlign = 'left'; TL.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, 6, 5 + i * lh); });
   ctx.textAlign = 'right'; TR.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, w - 6, 5 + i * lh); });
@@ -374,7 +438,11 @@ export function draw(): void {
   }
   ctx.textAlign = 'left'; ctx.fillStyle = pal.eblTxt; BL.forEach((s, i) => ctx.fillText(s, 6, w - 5 - (BL.length - 1 - i) * lh));
   const cr = cursorReadout(), BR: string[] = [];
-  if (cr) BR.push(`CURSEUR ${cr.b.toFixed(1)}°T ${cr.r.toFixed(2)} NM`);
+  if (cr) {
+    const G2 = geo(), pc = G2.inv(cursor.x!, cursor.y!), ll = toLL(pc.x, pc.y);
+    BR.push(`${fmtLat(ll.lat)} ${fmtLon(ll.lon)}`);
+    BR.push(`CURSEUR ${cr.b.toFixed(1)}°T ${cr.r.toFixed(2)} NM`);
+  }
   BR.push(S.env.vis === 'poor' ? 'BRUME' : S.env.night ? 'NUIT' : 'JOUR');
   ctx.textAlign = 'right'; BR.forEach((s, i) => { ctx.fillStyle = i === BR.length - 1 && S.env.vis === 'poor' ? pal.lost : pal.text; ctx.fillText(s, w - 6, w - 5 - (BR.length - 1 - i) * lh); });
 

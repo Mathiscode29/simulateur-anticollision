@@ -35,6 +35,7 @@ export function updateAlerts(): void {
   const xte = currentXte();
   if (xte !== null && S.route && Math.abs(xte) > S.route.xteLim)
     want(w, 'xte', 'caution', `Écart de route supérieur à ${S.route.xteLim} NM (${xte > 0 ? 'tribord' : 'bâbord'} de la route)`);
+  for (const n of S.navAlerts) want(w, n.id, n.cat, n.text);
   if (S.tracks.length >= TRACK_CAPACITY - 2) want(w, 'capacity', 'caution', `Capacité de suivi presque atteinte (${S.tracks.length}/${TRACK_CAPACITY})`);
 
   for (const a of S.alerts) {

@@ -3,20 +3,30 @@
  * Chaque situation est construite à rebours : on choisit le type de rencontre, le TCPA (min) et le CPA visé,
  * puis on place la cible pour que le mouvement relatif passe au CPA voulu. Le rôle obtenu est vérifié par roleOf.
  * Une rencontre peut être prévue après un point tournant de la route (référence « porteur virtuel » au point).
+ * Exercices du Pas-de-Calais : position de départ et points tournants géographiques (WGS 84), trafic qui suit
+ * les voies du DST (laneShip, laneMeet, laneAhead, laneFill).
  */
-import { S, logE, type Env, type Target, type TargetType, type Visibility } from '../core/state';
+import { S, logE, newTssWatch, type Behaviour, type Env, type Route, type Target, type TargetType, type Visibility } from '../core/state';
 import { DEFAULT_SHIP, SHIPS, TELE, TELE_SEA, TT } from '../core/data';
-import { K2N, brgOf, clamp, n360, p3, pick, pm, rnd, vec } from '../core/util';
+import { K2N, adiff, brgOf, clamp, n360, p3, pick, pm, rnd, vec } from '../core/util';
 import { gv, initOwnDynamics } from './physics';
 import { pickBeh, roleOf } from './rules';
 import { makeRoute } from './route';
+import { depthAt, laneOf, loadChart, pointAt, polyLength, projOnPolyline, tssAt, type ChartKey } from './chart';
+import { makeAis } from './ais';
+import { toXY } from '../core/geo';
 
 export type Kind = 'headon' | 'gw' | 'so' | 'overtake' | 'overtaken' | 'fish' | 'nuc' | 'sail' | 'any';
 
 export interface Scenario {
   n: string; d: string;
-  /** 1 = fondamentaux, 2 = situations combinées, 3 = avancé */
-  lvl: 1 | 2 | 3;
+  /** 1 = fondamentaux, 2 = situations combinées, 3 = avancé, 4 = Pas-de-Calais (DST) */
+  lvl: 1 | 2 | 3 | 4;
+  /** Carte : large (défaut, cap initial aléatoire) ou Pas-de-Calais (départ et route géographiques imposés). */
+  chart?: ChartKey;
+  /** Départ [latitude, longitude] et points tournants géographiques (degrés décimaux, WGS 84). */
+  start?: [number, number];
+  wpts?: [number, number][];
   vis: Visibility | null;
   /** Réglages d'environnement imposés à la sélection (modifiables ensuite). */
   env?: Partial<Env>;
@@ -28,7 +38,9 @@ export interface Scenario {
 /** Référence de placement : porteur réel maintenant, ou porteur virtuel à un point tournant à l'instant t0 (s). */
 interface Ref { x: number; y: number; hdg: number; stw: number; vx: number; vy: number; t0: number }
 
-export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé' };
+export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé', 4: 'Pas-de-Calais (DST, règle 10)' };
+
+const dm = (d: number, m: number): number => d + m / 60;
 
 export const SCEN: Record<string, Scenario> = {
   // ----- Fondamentaux
@@ -91,7 +103,94 @@ export const SCEN: Record<string, Scenario> = {
   a_wp_brume: { n: 'Changement de route en brume', d: 'Abattée de 45° sur bâbord au WP1, brume, trafic de part et d’autre.', lvl: 3, vis: 'poor',
     legs: [[0, 4], [-45, 50]],
     build() { add('so', rnd(12, 15), pm(0, 0.2)); addAfterWp(1, 'gw', 14, pm(0, 0.2)); addAfterWp(1, 'headon', 22, pm(0, 0.2)); } },
+
+  // ----- Pas-de-Calais (carte réelle, DST du détroit de Douvres)
+  pdc_cross: { n: 'Traversée du DST (R10c)', lvl: 4, vis: 'good', chart: 'pdc',
+    d: 'Traverser les deux voies à angle droit près de la bouée MPC, dans un trafic dense montant puis descendant. Courant de flot portant au NE.',
+    start: [dm(51, 2.5), dm(1, 46.7)], wpts: [[dm(51, 10.0), dm(1, 34.8)], [dm(51, 18.7), dm(1, 42.7)]],
+    env: { windFrom: 240, windKn: 15, curSet: 45, curKn: 1.2, night: false },
+    build() {
+      laneMeet('NE', rnd(10, 12), pm(0.15, 0.4), rnd(13, 17));
+      laneMeet('NE', rnd(17, 19), pm(0.3, 0.6), rnd(11, 15));
+      laneMeet('SW', rnd(28, 30), pm(0.15, 0.4), rnd(13, 18));
+      laneMeet('SW', rnd(33, 35), pm(0.3, 0.7), rnd(11, 16));
+      laneFill('NE', 5); laneFill('SW', 5);
+    } },
+  pdc_varne: { n: 'Rattrapement en brume, voie NE', lvl: 4, vis: 'poor', chart: 'pdc',
+    d: 'Brume entre le Colbart et le Varne : un navire lent devant vous dans la voie montante, un rapide qui vous rattrape, un transbordeur qui coupe le DST.',
+    start: [dm(50, 48.0), dm(1, 24.9)], wpts: [[dm(50, 53.8), dm(1, 27.4)], [dm(51, 0.3), dm(1, 34.0)], [dm(51, 6.0), dm(1, 43.0)], [dm(51, 8.7), dm(1, 50.5)]],
+    env: { windFrom: 200, windKn: 10, curSet: 30, curKn: 1.5, rain: false },
+    build() {
+      laneAhead('NE', 3.6, pm(0, 0.12), 7);
+      laneAhead('NE', -2.8, rnd(0.4, 0.6), 19);
+      laneAhead('NE', 9.5, pm(0.5, 0.9), 11);
+      const f = add('gw', rnd(17, 21), pm(0, 0.3));
+      if (f) { f.name = 'Transbordeur'; f.L = 190; }
+      laneFill('SW', 4);
+    } },
+  pdc_rogue: { n: 'Navire à contresens (voie SW)', lvl: 4, vis: 'good', chart: 'pdc',
+    d: 'De nuit dans la voie descendante, au large de Douvres : un navire remonte la voie à contresens. Le détecter tôt (radar, AIS) et l’éviter.',
+    start: [dm(51, 13.0), dm(1, 43.2)], wpts: [[dm(51, 4.6), dm(1, 31.5)], [dm(50, 58.3), dm(1, 22.0)], [dm(50, 52.6), dm(1, 13.5)]],
+    env: { windFrom: 30, windKn: 14, curSet: 225, curKn: 1.0, night: true },
+    build() {
+      const r = laneAhead('SW', 10.5, pm(0.05, 0.2), 12, { dir: -1, beh: Math.random() < 0.5 ? 'late' : 'passive' });
+      if (r) r.name = 'Cargo (à contresens)';
+      laneAhead('SW', 3.2, pm(0.6, 1.0), 10.5);
+      laneAhead('SW', 6.8, pm(0.6, 1.1), 12);
+      laneAhead('SW', -3, rnd(0.35, 0.5), 18.5);
+      laneFill('NE', 5);
+    } },
 };
+
+// ---------------------------------------------------------------- trafic des voies du DST
+
+interface LaneOpt { type?: TargetType; dir?: 1 | -1; beh?: Behaviour }
+
+/** Navire qui suit une voie : abscisse s (NM) sur l'axe, décalage latéral off (NM, + = tribord du sens réglementaire). */
+export function laneShip(id: 'NE' | 'SW', s: number, off: number, spd: number, o: LaneOpt = {}): Target | null {
+  const l = laneOf(id);
+  if (!l) return null;
+  const p = pointAt(l.axis, clamp(s, 0, polyLength(l.axis))), n = vec(p.brg + 90, off), dir = o.dir ?? 1;
+  const t = mkT(o.type ?? 'power', n360(dir > 0 ? p.brg : p.brg + 180), spd, p.x + n.x, p.y + n.y);
+  t.lane = id; t.laneDir = dir; t.laneOff = off;
+  if (o.beh) t.beh = o.beh;
+  return t;
+}
+
+/** Navire de voie placé à `ds` NM devant (ou derrière si < 0) le porteur le long de l'axe, décalé de `dOff` NM vers tribord. */
+export function laneAhead(id: 'NE' | 'SW', ds: number, dOff: number, spd: number, o: LaneOpt = {}): Target | null {
+  const l = laneOf(id);
+  if (!l) return null;
+  const me = S.own, p = projOnPolyline(l.axis, me.x, me.y), sgn = Math.abs(adiff(me.hdg, p.brg)) < 90 ? 1 : -1;
+  return laneShip(id, p.s + sgn * ds, p.d + dOff, spd, o);
+}
+
+/**
+ * Navire de voie qui passera, dans `Tmin` minutes, au point où le porteur coupe l'axe de la voie,
+ * décalé de `miss` NM le long de la voie (> 0 : il passe devant le point de rencontre).
+ */
+export function laneMeet(id: 'NE' | 'SW', Tmin: number, miss: number, spd: number, o: LaneOpt = {}): Target | null {
+  const l = laneOf(id);
+  if (!l) return null;
+  const me = S.own, T = Tmin * 60, dir = o.dir ?? 1;
+  const P = { x: me.x + me.vx * K2N * T, y: me.y + me.vy * K2N * T }, pr = projOnPolyline(l.axis, P.x, P.y);
+  const g = gv(dir > 0 ? pr.brg : pr.brg + 180, spd, 0.035), u = vec(pr.brg, 1), vAlong = g.x * u.x + g.y * u.y;
+  return laneShip(id, pr.s + miss - vAlong * K2N * T, pr.d + pm(0, 0.15), spd, o);
+}
+
+/** Trafic de fond dans une voie : n navires répartis le long de l'axe, à distance du porteur et entre eux. */
+export function laneFill(id: 'NE' | 'SW', n: number): void {
+  const l = laneOf(id);
+  if (!l) return;
+  const L = polyLength(l.axis), me = S.own;
+  for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
+    const s = rnd(0.5, L - 0.5), off = pm(0, 1.3), p = pointAt(l.axis, s), q = vec(p.brg + 90, off), x = p.x + q.x, y = p.y + q.y;
+    if (Math.hypot(x - me.x, y - me.y) < 2.5 || S.targets.some((t) => Math.hypot(t.x - x, t.y - y) < 1)) continue;
+    if (depthAt(x, y) < 30 || tssAt(x, y).kind !== (id === 'NE' ? 'laneNE' : 'laneSW')) continue;
+    laneShip(id, s, off, rnd(10, 19), { type: Math.random() < 0.2 ? 'small' : 'power' });
+    placed++;
+  }
+}
 
 function shuffle<T>(a: T[]): T[] { return a.sort(() => Math.random() - 0.5); }
 
@@ -112,6 +211,7 @@ export function mkT(type: TargetType, hdg: number, stw: number, x: number, y: nu
     maxRot: L > 250 ? 0.45 : L > 150 ? 0.7 : L > 60 ? 1.1 : 2.5, tau: L > 150 ? 25 : L > 60 ? 14 : 6,
     acc: L > 150 ? 220 : 90, dec: L > 150 ? 380 : 130, wind: wOf(type), rcs: clamp(L / 70, 0.3, 5), beh: pickBeh(),
     ai: { state: 'transit', role: null, cool: 0 }, echo: null, nextFish: S.t + rnd(600, 1200), vx: 0, vy: 0,
+    ais: makeAis(type),
   };
   const g = gv(hdg, stw, t.wind);
   t.vx = g.x; t.vy = g.y;
@@ -163,6 +263,7 @@ export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef()):
     const x = mx - tv.x * K2N * T + nx * off, y = my - tv.y * K2N * T + ny * off;
     const r = Math.hypot(x - me.x, y - me.y);
     if (r < 2.5 || r > rMax) continue;
+    if (depthAt(x, y) < 15) continue; // jamais à terre ni sur un banc
     // géométrie vue depuis la référence (au point tournant pour une rencontre après abattée)
     const px = x + tv.x * K2N * o.t0, py = y + tv.y * K2N * o.t0;
     const tb = n360(brgOf(px - o.x, py - o.y) - H);
@@ -174,20 +275,33 @@ export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef()):
 }
 
 export function newScenario(): void {
-  const sh = SHIPS[S.shipKey] ?? SHIPS[DEFAULT_SHIP], H = Math.round(rnd(0, 359)), sc = SCEN[S.scen];
-  S.own = { x: 0, y: 0, hdg: H, cmdHdg: H, stw: sh.max, rot: 0, rud: 0, tele: TELE_SEA, ap: true, manRud: 0, rudLim: 20, ship: sh, type: 'power', L: sh.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0 };
+  const sh = SHIPS[S.shipKey] ?? SHIPS[DEFAULT_SHIP], sc = SCEN[S.scen];
+  const chart = loadChart(sc.chart ?? 'open');
+  const lim = S.route?.xteLim ?? 1, show = S.route?.show ?? true;
+  let H: number, x0 = 0, y0 = 0, route: Route;
+  if (sc.start && sc.wpts) {
+    // départ et route géographiques
+    const p0 = toXY(sc.start[0], sc.start[1]), w = sc.wpts.map(([la, lo]) => toXY(la, lo));
+    const h = brgOf(w[0].x - p0.x, w[0].y - p0.y), back = vec(h, 2);
+    H = Math.round(h); x0 = p0.x; y0 = p0.y;
+    route = { wps: [{ x: x0 - back.x, y: y0 - back.y }, ...w], leg: 0, xteLim: lim, show, maxXte: 0, tOver: 0 };
+  } else {
+    H = Math.round(rnd(0, 359));
+    route = { ...makeRoute(0, 0, H, sc.legs ?? [[0, 60]], lim), show };
+  }
+  S.own = { x: x0, y: y0, hdg: H, cmdHdg: H, stw: sh.max, rot: 0, rud: 0, tele: TELE_SEA, ap: true, manRud: 0, rudLim: 20, ship: sh, type: 'power', L: sh.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0 };
   initOwnDynamics(S.own, sh.max);
   const w = vec(H, sh.max), c = vec(S.env.curSet, S.env.curKn);
   S.own.vx = w.x + c.x; S.own.vy = w.y + c.y;
-  const lim = S.route?.xteLim ?? 1, show = S.route?.show ?? true;
   Object.assign(S, {
     t: 0, targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1,
     aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], over: false, collided: null, report: null, started: false, paused: true,
-    alerts: [], rainCells: [], silencedUntil: 0,
-    route: { ...makeRoute(0, 0, H, sc.legs ?? [[0, 60]], lim), show },
+    alerts: [], rainCells: [], silencedUntil: 0, route,
+    chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [],
   });
+  Object.assign(S.ecdis, { ebl: null, vrm: null, routeIssues: [] });
   Object.assign(S.radar, {
-    cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), trial: false, trialT0: 0, tmC: { x: 0, y: 0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
+    cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), trial: false, trialT0: 0, tmC: { x: x0, y: y0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
     ebl: [null, null], vrm: [null, null], pi: [null, null, null, null],
   });
   sc.build();

@@ -11,10 +11,14 @@
  *   sur 75 s. Tendance après 1 min, prédiction stabilisée après 3 min (MSC.192(79) 5.25.4.1). Cible perdue
  *   après 20 s (8 balayages) sans écho.
  * - Zone d'acquisition automatique : acquisition et alarme à l'entrée dans la zone (5.29.3).
+ * - Côte : lancer de rayons tous les 0,5° (voir chart.ts). L'écho de côte occupe une bande depuis le trait de côte
+ *   (falaises, arrière-pays) ; tout ce qui est situé derrière la première terre rencontrée est masqué, cibles comprises.
+ * - Bouées (≈ 0,4 m² équivalents avec réflecteur) et bateaux-feux : échos fixes, soumis au clutter et au masquage.
  */
 import { S, logE, type Target, type Track, type TrialResult } from '../core/state';
 import { K2N, R2D, brgOf, clamp, cpaOf, gauss, vec, type Vec } from '../core/util';
 import { ownWater } from './physics';
+import { CHART, NRAYS, coastRays, rayIndex } from './chart';
 import { TRACK_CAPACITY, raiseEvent, updateAlerts } from './alerts';
 
 export const SWP = 2.5;
@@ -59,12 +63,56 @@ export function rainStep(dt: number): void {
   for (const c of S.rainCells) { c.x += w.x * K2N * dt; c.y += w.y * K2N * dt; }
 }
 
+/** Bande d'écho de côte (NM) propre à chaque rayon : pseudo-aléatoire stable, plus large aux caps et falaises. */
+function bandOf(i: number): number {
+  const h = Math.sin(i * 12.9898) * 43758.5453;
+  return 0.25 + 0.9 * (h - Math.floor(h));
+}
+
+/** Recalcule les rayons de côte quand le porteur s'est déplacé de plus de 0,05 NM. */
+export function coastStep(): void {
+  if (!CHART.edges.length) { S.coast = null; return; }
+  const o = S.own, c = S.coast;
+  if (c && Math.hypot(o.x - c.ox, o.y - c.oy) < 0.05) return;
+  const r = coastRays(o.x, o.y);
+  const band = c?.band ?? Float32Array.from({ length: NRAYS }, (_, i) => bandOf(i));
+  S.coast = { ox: o.x, oy: o.y, r0: r.r0, r1: r.r1, t: c?.t ?? new Float32Array(NRAYS).fill(-1e9), band };
+}
+
+/** Vrai si un point situé au relèvement b et à la distance r est masqué par la terre. */
+export function masked(b: number, r: number): boolean {
+  const c = S.coast;
+  return !!c && r > c.r0[rayIndex(b)] + 0.03;
+}
+
 export function radarStep(dt: number): void {
   const a0 = S.sweep, d = Math.min(360, (360 * dt) / SWP), o = S.own;
   S.sweep = (a0 + d) % 360;
   for (const t of S.targets) {
     const dx = t.x - o.x, dy = t.y - o.y, b = brgOf(dx, dy);
     if (inSweep(b, a0, d)) paint(t, dx, dy, b);
+  }
+  // côte : rayons éclairés pendant ce pas
+  coastStep();
+  const c = S.coast;
+  if (c) {
+    const step = 360 / NRAYS, i0 = Math.ceil(a0 / step), n = Math.floor(d / step) + 1, thr = gainThreshold();
+    for (let k = 0; k < n; k++) {
+      const i = (i0 + k) % NRAYS;
+      if (!inSweep(i * step, a0, d) || c.r0[i] > 32) continue;
+      const v = vec(i * step, c.r0[i]), att = rainAttenuation(o.x + v.x, o.y + v.y);
+      if (att * (Math.random() < 0.96 ? 3 : 0.1) > thr) c.t[i] = S.t;
+    }
+  }
+  // bouées et bateaux-feux
+  for (const m of CHART.marks) {
+    const dx = m.x - o.x, dy = m.y - o.y, b = brgOf(dx, dy);
+    if (!inSweep(b, a0, d)) continue;
+    const r = Math.hypot(dx, dy);
+    if (masked(b, r)) continue;
+    const rcs = m.kind === 'lv' ? 3 : 0.4, rmax = 3 + 6 * Math.sqrt(rcs);
+    const s = ((rcs * (0.6 + 0.8 * Math.random())) / (1 + Math.pow(r / rmax, 4))) * rainAttenuation(m.x, m.y);
+    if (s >= Math.max(gainThreshold(), seaLevel() * 1.4 * Math.exp(-r / clutR()))) S.markEcho[m.id] = S.t;
   }
   // clutter de mer, bruit récepteur et grains : régénérés sur le secteur balayé
   S.clutter = S.clutter.filter((p) => !inSweep(p.b, a0, d));
@@ -110,6 +158,7 @@ function inRain(x: number, y: number): boolean {
 
 function paint(t: Target, dx: number, dy: number, b: number): void {
   const r = Math.hypot(dx, dy), small = t.rcs < 1;
+  if (masked(b, r)) return; // derrière la terre : pas d'écho
   const rcs = t.rcs * (S.radar.band === 'S' && small ? 0.8 : 1);
   const rmax = 3 + 6 * Math.sqrt(rcs);
   const fl = small ? 0.55 + 0.9 * Math.random() : 0.8 + 0.4 * Math.random();

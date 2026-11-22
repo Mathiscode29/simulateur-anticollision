@@ -9,6 +9,8 @@ import { K2N, adiff, brgOf, cpaOf, fMin, n360, vec } from '../core/util';
 import { SCEN } from './scenarios';
 import { roleOf } from './rules';
 import { currentXte } from './route';
+import { tssReport } from './nav';
+import { depthAt } from './chart';
 
 export function tLabel(t: Target): string {
   const tr = S.tracks.find((k) => k.tid === t.id);
@@ -153,9 +155,13 @@ export function finish(): void {
     if (xte <= r.xteLim / 2) global.push(['ok', `Route reprise : écart final ${xte.toFixed(2)} NM.`]);
     else if (!unfinished) global.push(['warn', `Route non reprise en fin d'exercice (écart ${xte.toFixed(2)} NM) : une fois paré et clair, revenir sur la route prévue.`]);
   }
+  const tr10 = tssReport();
+  pen += tr10.pen; global.push(...tr10.m);
+  const grounded = S.grounded;
+  if (grounded) global.unshift(['bad', `Échouement (fonds ≈ ${Math.max(0, depthAt(S.own.x, S.own.y)).toFixed(1)} m pour ${S.own.ship.mmg.d.toFixed(1)} m de tirant d'eau) : R6(a)(vi) impose de tenir compte du tirant d'eau par rapport aux fonds disponibles ; surveiller le contour de sécurité ECDIS.`]);
   const collided = S.collided !== null;
-  if (unfinished && !collided) global.push(['info', `Exercice interrompu : ${unfinished} situation(s) encore en cours, la note ne porte que sur ce qui a été joué.`]);
-  const score = collided ? 0 : Math.max(0, 100 - pen);
-  const grade = collided ? 'Abordage' : unfinished ? 'Exercice interrompu' : score >= 85 ? 'Très bien' : score >= 70 ? 'Correct' : score >= 50 ? 'Insuffisant' : 'Dangereux';
-  S.report = { score, grade, scen: SCEN[S.scen].n, duration: S.t, global, items, collided };
+  if (unfinished && !collided && !grounded) global.push(['info', `Exercice interrompu : ${unfinished} situation(s) encore en cours, la note ne porte que sur ce qui a été joué.`]);
+  const score = collided || grounded ? 0 : Math.max(0, 100 - pen);
+  const grade = collided ? 'Abordage' : grounded ? 'Échouement' : unfinished ? 'Exercice interrompu' : score >= 85 ? 'Très bien' : score >= 70 ? 'Correct' : score >= 50 ? 'Insuffisant' : 'Dangereux';
+  S.report = { score, grade, scen: SCEN[S.scen].n, duration: S.t, global, items, collided, grounded };
 }

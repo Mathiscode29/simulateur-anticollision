@@ -10,8 +10,9 @@
  */
 import { S, type Behaviour, type OwnShip, type Role, type Target, type TargetType, type Visibility } from '../core/state';
 import { SPECIAL } from '../core/data';
-import { K2N, adiff, brgOf, cpaOf, fMin, n360, pm, rnd } from '../core/util';
+import { K2N, adiff, brgOf, cpaOf, fMin, n360, pm, rnd, vec } from '../core/util';
 import { gv } from './physics';
+import { depthAt, laneOf, laneSteer } from './chart';
 
 export interface Vessel { x: number; y: number; hdg: number; stw: number; type: TargetType | 'power' }
 
@@ -54,6 +55,17 @@ export function aiStep(t: Target): void {
   const o = S.own, a = t.ai, rx = o.x - t.x, ry = o.y - t.y, range = Math.hypot(rx, ry);
   const c = cpaOf(rx, ry, (o.vx - t.vx) * K2N, (o.vy - t.vy) * K2N);
   const ob = n360(brgOf(rx, ry) - t.hdg);
+  // navire qui suit une voie du DST : la route de base suit l'axe de la voie (avec son décalage latéral)
+  if (t.lane) {
+    const l = laneOf(t.lane);
+    if (l) {
+      // se rapprocher de l'axe (profond) si des petits fonds approchent sur l'avant
+      const h = vec(t.hdg, 1.5);
+      if (t.laneOff && depthAt(t.x + h.x, t.y + h.y) < 25) t.laneOff *= 0.7;
+      t.baseHdg = laneSteer(l, t.x, t.y, t.laneOff ?? 0, t.laneDir ?? 1);
+      if (a.state === 'transit') t.cmdHdg = t.baseHdg;
+    }
+  }
   if (a.state === 'transit') {
     if (t.type === 'fish' && S.t > t.nextFish) {
       t.baseHdg = n360(t.baseHdg + pm(30, 80)); t.cmdHdg = t.baseHdg; t.nextFish = S.t + rnd(900, 1500);

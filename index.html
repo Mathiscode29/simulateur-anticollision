@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Simulateur radar/ARPA d'entraînement à l'anticollision (RIPAM)">
-<title>Simulateur anticollision — Radar ARPA</title>
+<meta name="description" content="Simulateur radar/ARPA et ECDIS d'entraînement à l'anticollision (RIPAM)">
+<title>Simulateur anticollision — Radar ARPA et ECDIS</title>
 <link rel="icon" href="data:,">
 </head>
-<body class="pal-dusk">
+<body class="pal-dusk view-radar">
 <div id="app">
 <header>
   <span class="brand">⚓<span class="bt"> ANTICOLLISION</span></span>
@@ -15,12 +15,14 @@
   <button id="play" data-act="play" title="Lecture / pause (Espace)">▶</button>
   <div class="seg" data-seg="ts" title="Accélération du temps"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
   <span class="sp"></span>
+  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button></div>
   <div class="seg" data-seg="palette" title="Palette d'affichage"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div>
   <span class="stcw" title="Outil d'entraînement complémentaire, non agréé au titre de la convention STCW">Non agréé STCW</span>
 </header>
 <main>
 <div id="left">
   <div id="radarWrap"><canvas id="radar"></canvas></div>
+  <div id="ecdisWrap"><canvas id="ecdis"></canvas></div>
 </div>
 <div id="panel">
   <section class="blk" id="own">
@@ -37,6 +39,9 @@
       <div><small>ROUTE PRÉVUE</small><b id="nLeg">—</b></div>
       <div><small>DIST. WP SUIVANT</small><b id="nDtw">—</b></div>
       <div><small>RLV WP SUIVANT</small><b id="nBtw">—</b></div>
+      <div class="w2"><small>POSITION GNSS (WGS 84)</small><b id="nPos">—</b></div>
+      <div><small>SONDE (FONDS)</small><b id="nDep">—</b></div>
+      <div><small>ZONE</small><b id="nZone">—</b></div>
       <div class="env" id="nEnv"></div>
     </div>
   </section>
@@ -50,6 +55,7 @@
     <button data-tab="barre" class="on">Barre</button>
     <button data-tab="radar">Radar</button>
     <button data-tab="arpa">Cibles</button>
+    <button data-tab="ecdis">ECDIS</button>
     <button data-tab="exo">Exercice</button>
     <button data-tab="bilan">Bilan</button>
   </div>
@@ -111,6 +117,22 @@
     <div class="row"><span class="lbl">Délai</span><div class="seg" data-seg="trialDelay"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5 min</button></div><span id="trCount" class="mono small"></span></div>
   </section>
 
+  <section class="tab" id="t-ecdis">
+    <div class="row"><span class="lbl">Échelle</span><button data-act="ecZoom" data-v="-1">−</button><b id="ecRng" class="mono" style="min-width:70px;text-align:center">6 NM</b><button data-act="ecZoom" data-v="1">+</button><button data-act="ecCenter">Centrer sur le navire</button></div>
+    <div class="row"><span class="lbl">Contour de sécurité</span><div class="seg" data-seg="ecSafety"><button data-v="10">10 m</button><button data-v="20">20 m</button><button data-v="30">30 m</button></div><span id="ecDraft" class="dim small"></span></div>
+    <div class="row"><span class="lbl">Anticipation</span><div class="seg" data-seg="ecLook"><button data-v="3">3 min</button><button data-v="6">6 min</button><button data-v="12">12 min</button></div></div>
+    <div class="row"><span class="lbl">Clic sur la carte</span><div class="seg" data-seg="ecTool"><button data-v="INFO">Info</button><button data-v="EBL">EBL/VRM</button><button data-v="ROUTE">Tracé de route</button></div></div>
+    <div class="row"><span class="lbl">Couches</span><div class="seg" id="ecLayers"><button data-act="layer" data-v="tss">DST</button><button data-act="layer" data-v="depth">Fonds</button><button data-act="layer" data-v="names">Noms</button><button data-act="layer" data-v="ais">AIS</button><button data-act="layer" data-v="arpa">ARPA</button></div></div>
+    <div class="row"><span class="lbl">AIS sur le radar</span><div class="seg" data-seg="aisRadar"><button data-v="1">Superposé</button><button data-v="0">Masqué</button></div></div>
+    <h4>Route</h4>
+    <div class="row"><button data-act="routeNew" title="La route repart de la position du navire ; cliquez ensuite sur la carte (outil Tracé de route)">Nouvelle route depuis le navire</button><button data-act="routeUndo">Retirer le dernier WP</button><button data-act="routeCheck">Vérifier la route</button></div>
+    <div class="row"><button data-act="ecClr">Effacer EBL/VRM</button></div>
+    <p class="dim small" id="ecRouteTxt"></p>
+    <h4>Objet sélectionné</h4>
+    <div id="ecPick" class="card small"><span class="dim">Outil Info : cliquez sur une cible AIS, une piste radar, une bouée ou le navire.</span></div>
+    <p class="dim small">Carte d'entraînement schématique, non destinée à la navigation. Trait de côte © contributeurs OpenStreetMap (ODbL) ; DST : positions officielles OMI (COLREG.2/Circ.59) ; bancs et isobathes schématiques ; positions de bouées marquées ≈ approchées.</p>
+  </section>
+
   <section class="tab" id="t-exo">
     <h4>Scénario</h4>
     <div class="scgrid" data-seg="scen"></div>
@@ -143,10 +165,12 @@
         <tr><td>N</td><td>orientation (north / course / head up)</td></tr>
         <tr><td>T</td><td>manœuvre d'essai</td></tr>
         <tr><td>Entrée</td><td>acquitter les alertes</td></tr>
+        <tr><td>V</td><td>vue radar / ECDIS / radar + ECDIS</td></tr>
+        <tr><td>ECDIS : glisser, molette</td><td>déplacer la carte, échelle (C : recentrer)</td></tr>
         <tr><td>Espace</td><td>lecture / pause</td></tr>
       </table>
     </details>
-    <p class="dim small">Limites actuelles : les cibles ne s'évitent pas entre elles, pas d'AIS, pas de DST ni de côte, eau profonde uniquement. Outil d'entraînement complémentaire, non agréé STCW.</p>
+    <p class="dim small">Limites actuelles : les cibles ne s'évitent pas entre elles ; carte du Pas-de-Calais schématique (bathymétrie modélisée, pas de marée). Outil d'entraînement complémentaire, non agréé STCW.</p>
   </section>
 
   <section class="tab" id="t-bilan">

@@ -33,7 +33,9 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 | 5.29.4 | Alerte de cible perdue, dernière position affichée | ✅ | Cercle barré clignotant jusqu'à l'acquittement. |
 | 5.31 | Manœuvre d'essai clairement identifiée, avec décompte, poursuite maintenue | ✅ | Grand « T », décompte jusqu'à l'exécution, vecteurs d'essai. |
 | 5.34 / 6.1.4 | Alertes, acquittement en commande principale | 🟡 | Liste des alertes (alarme / avertissement / attention), acquittement individuel ou global (Entrée), signal sonore coupable 30 s. Gestion simplifiée par rapport à MSC.302(87). |
-| 5.26 / 5.28.3 | Cibles AIS (endormies, activées), données AIS | ❌ | Prévu (feuille de route, phase 3). |
+| 5.26 / 5.28.3 | Cibles AIS (endormies, activées), données AIS | 🟡 | Superposition AIS au radar (triangles), symbole barré si cible perdue ; activation et données AIS détaillées dans la vue ECDIS (MMSI, nom, statut, RF/VF, âge du message). Filtrage AIS et alarme CPA sur cible AIS seule non proposés. |
+| 5.33 | Association radar / AIS, priorité par défaut à l'AIS | 🟡 | Association sur écarts de position, route et vitesse ; symbole AIS affiché pour la piste associée, source « R+A » dans la table. Critères non réglables. |
+| 5.4 / 5.32 | Échos de côte, zones d'ombre | 🟡 | Côte par lancer de rayons tous les 0,5° (trait de côte OSM) ; bande d'écho depuis la côte, masquage de tout ce qui est derrière la première terre. Relief non modélisé (pas d'altitude), pas de radar de cartes (5.32 : superposition de la carte au radar non proposée). |
 | 5.34.1-2 | Alerte de gel de l'image, défaillance de capteur | ❌ | Sans objet en simulation pour l'instant. |
 | 6 | Couleurs jour / nuit | ✅ | Palettes jour, crépuscule et nuit. |
 
@@ -49,3 +51,17 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 | Positions passées : points équidistants en temps | ✅ | 4 points, intervalle 30 s, 1 ou 2 min. |
 | Navire porteur : double cercle, contour à grande échelle | ✅ | |
 | Cible de référence « R » | ❌ | Utile avec la stabilisation sol sur référence ; non prévue. |
+| Cible AIS endormie : triangle isocèle aigu orienté selon le cap | ✅ | Radar et ECDIS. |
+| Cible AIS activée : triangle, vecteur RF/VF, ligne de cap | 🟡 | ECDIS (activée à moins de 6 NM, si associée ou sélectionnée) ; au radar, piste associée seulement. |
+| Cible AIS perdue : triangle barré | ✅ | Plus de message depuis 6 intervalles nominaux (au moins 60 s). |
+
+## ECDIS (repères MSC.232(82), sans revendiquer de conformité)
+
+| Fonction | État | Remarque |
+|---|---|---|
+| Position du porteur en latitude / longitude WGS 84 | ✅ | Panneau de navigation, radar (curseur) et ECDIS. |
+| Contour de sécurité choisi par l'utilisateur, mis en valeur | ✅ | 10, 20 ou 30 m ; zones de profondeur colorées par rapport à ce contour. |
+| Alarme de franchissement du contour de sécurité dans un délai réglable | ✅ | 3, 6 ou 12 min sur le vecteur route fond, bande latérale de ± 0,1 NM ; alarme sonore. |
+| Indication d'entrée dans une zone particulière (DST) | ✅ | Alerte « attention » à l'entrée dans une voie ; R10 suivie en continu. |
+| Planification et vérification de route | 🟡 | Tracé à la souris, contrôle des segments par rapport au contour de sécurité ; pas de couloir de route paramétrable par segment. |
+| Présentation S-52 | 🟡 | Couleurs et symboles inspirés de S-52 (jour, crépuscule, nuit), carte schématique : pas de cellule S-57/S-101. |

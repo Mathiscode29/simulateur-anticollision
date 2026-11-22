@@ -10,7 +10,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Déploiement GitHub Pages automatique
 - [x] Licence : tous droits réservés
 - [ ] Mode hors ligne (PWA : manifeste + service worker) pour l'utilisation à bord
-- [ ] Bandeau « outil d'entraînement, non agréé STCW » dans l'interface
+- [x] Bandeau « outil d'entraînement, non agréé STCW » dans l'interface
 
 ## Phase 1 — Moteur (axe 1 : vrais modèles de navire)
 - [x] Modèle MMG 3 DDL (méthode standard Yasukawa & Yoshimura 2015), intégration RK4
@@ -33,9 +33,13 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Éditeur d'exercices et partage par lien (voir phase 4)
 
 ## Phase 2 — Zone réelle et DST
-- [ ] Zone du Pas-de-Calais ou d'Ouessant à partir de données libres (OpenStreetMap, coordonnées publiées des DST)
-- [ ] Côte, échos de terre, zones d'ombre radar
-- [ ] Trafic IA conforme à R10 : flux dans les voies, ferries traversiers, pêcheurs dans la zone de séparation
+- [x] Zone du Pas-de-Calais à partir de données libres (trait de côte OpenStreetMap, DST d'après COLREG.2/Circ.59), géoréférencement WGS 84
+- [x] Côte, échos de terre et de bouées, zones d'ombre radar (masquage derrière la terre)
+- [x] Trafic IA qui suit les voies du DST, ferry traversier, navire à contresens ; évaluation de la règle 10
+- [x] Trois exercices du Pas-de-Calais (traversée R10c, rattrapement en brume voie NE, navire à contresens voie SW)
+- [ ] Bathymétrie réelle libre (EMODnet) à la place du modèle schématique ; marée (hauteur et courants)
+- [ ] Pêcheurs dans la zone de séparation, routes des ferries Douvres–Calais
+- [ ] Zone d'Ouessant (DST d'Ouessant)
 - [ ] Interaction entre cibles (elles s'évitent entre elles)
 
 ## Phase 3 — Interface professionnelle (priorité ordinateur)
@@ -43,9 +47,11 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Vidéo : gain, anti-clutter mer (auto/manuel) et pluie, bandes X/S, grains
 - [x] Gestion des alertes (alarme / avertissement / attention, acquittement, son)
 - [x] Mise en page poste fixe et raccourcis clavier ; palettes jour / crépuscule / nuit
-- [ ] AIS avec ses erreurs (latence, cap/vitesse faux, cibles sans AIS)
+- [x] AIS : classes A et B, cadences, cibles sans AIS, association radar/AIS, superposition au radar
+- [ ] Erreurs AIS (cap ou vitesse faux, MMSI dupliqué, position décalée), filtrage des cibles AIS
 - [ ] Confrontation à la norme d'essai IEC 62388
-- [ ] ECDIS simplifié : position en latitude / longitude, carte de la zone, isobathes et hauts-fonds, alarmes de route (données libres)
+- [x] ECDIS simplifié : position en latitude / longitude, carte de la zone, isobathes et hauts-fonds, contour de sécurité et alarme, DST, AIS/ARPA, EBL/VRM, tracé et vérification de route ; vues Radar / ECDIS / côte à côte
+- [ ] ECDIS : couloir de route par segment, alarmes d'arrivée au WP, suivi de route automatique (track control), superposition radar sur la carte
 - [ ] Interface en anglais (langue de travail des équipages internationaux)
 - [ ] Ordres à la barre à la voix en anglais SMCP (reconnaissance vocale du navigateur)
 
