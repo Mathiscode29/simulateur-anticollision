@@ -2,38 +2,50 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Simulateur radar/ARPA d'entraînement à l'anticollision (RIPAM)">
 <title>Simulateur anticollision — Radar ARPA</title>
+<link rel="icon" href="data:,">
 </head>
-<body>
+<body class="pal-dusk">
 <div id="app">
 <header>
   <span class="brand">⚓<span class="bt"> ANTICOLLISION</span></span>
   <span id="clock">T+00:00</span>
-  <button id="play" data-act="play">▶</button>
-  <div class="seg" data-seg="ts"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
+  <button id="play" data-act="play" title="Lecture / pause (Espace)">▶</button>
+  <div class="seg" data-seg="ts" title="Accélération du temps"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
+  <span class="sp"></span>
+  <div class="seg" data-seg="palette" title="Palette d'affichage"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div>
+  <span class="stcw" title="Outil d'entraînement complémentaire, non agréé au titre de la convention STCW">Non agréé STCW</span>
 </header>
 <main>
 <div id="left">
-  <div id="radarWrap"><canvas id="radar"></canvas><div id="alarm"></div></div>
-  <div id="nav">
-    <div><small>CAP GYRO</small><b id="nHdg">—</b></div>
-    <div><small>ROUTE FOND</small><b id="nCog">—</b></div>
-    <div><small>V SURFACE</small><b id="nStw">—</b></div>
-    <div><small>V FOND</small><b id="nSog">—</b></div>
-    <div><small>BARRE</small><b id="nRud">—</b></div>
-    <div><small>GIRATION</small><b id="nRot">—</b></div>
-    <div><small>CAP ORDONNÉ</small><b id="nCmd">—</b></div>
-    <div><small>MACHINE</small><b id="nTel">—</b></div>
-    <div class="env" id="nEnv"></div>
-  </div>
+  <div id="radarWrap"><canvas id="radar"></canvas></div>
 </div>
 <div id="panel">
+  <section class="blk" id="own">
+    <div id="nav">
+      <div><small>CAP GYRO</small><b id="nHdg">—</b></div>
+      <div><small>ROUTE FOND</small><b id="nCog">—</b></div>
+      <div><small>V SURFACE (LOCH)</small><b id="nStw">—</b></div>
+      <div><small>V FOND (GNSS)</small><b id="nSog">—</b></div>
+      <div><small>BARRE</small><b id="nRud">—</b></div>
+      <div><small>GIRATION</small><b id="nRot">—</b></div>
+      <div><small>CAP ORDONNÉ</small><b id="nCmd">—</b></div>
+      <div><small>MACHINE</small><b id="nTel">—</b></div>
+      <div class="env" id="nEnv"></div>
+    </div>
+  </section>
+  <section class="blk" id="alertBox">
+    <div class="ahead"><b>Alertes</b><span id="alertCount" class="dim"></span><span class="sp"></span>
+      <button data-act="silence" title="Couper le signal sonore 30 s">🔇 30 s</button>
+      <button data-act="ackAll" title="Acquitter toutes les alertes (Entrée)">Acquitter tout</button></div>
+    <div id="alerts"></div>
+  </section>
   <div id="tabs">
     <button data-tab="barre" class="on">Barre</button>
     <button data-tab="radar">Radar</button>
-    <button data-tab="arpa">ARPA</button>
+    <button data-tab="arpa">Cibles</button>
     <button data-tab="exo">Exercice</button>
     <button data-tab="bilan">Bilan</button>
   </div>
@@ -57,41 +69,47 @@
     </div>
     <h4>Transmetteur d'ordres</h4>
     <div class="tele" id="tele"></div>
-    <p class="dim" id="shipInfo" style="font-size:11.5px"></p>
+    <p class="dim small" id="shipInfo"></p>
   </section>
 
   <section class="tab" id="t-radar">
-    <div class="row"><span class="lbl">Échelle</span><button data-act="rng" data-v="-1">−</button><b id="rngTxt" style="min-width:70px;text-align:center;font-family:monospace">6 NM</b><button data-act="rng" data-v="1">+</button></div>
-    <div class="row"><span class="lbl">Orientation</span><div class="seg" data-seg="orient"><button data-v="HU">Head-up</button><button data-v="NU">North-up</button><button data-v="CU">Course-up</button></div></div>
+    <div class="row"><span class="lbl">Échelle</span><button data-act="rng" data-v="-1" title="Touche −">−</button><b id="rngTxt" class="mono" style="min-width:70px;text-align:center">6 NM</b><button data-act="rng" data-v="1" title="Touche +">+</button></div>
+    <div class="row"><span class="lbl">Mouvement</span><div class="seg" data-seg="motion"><button data-v="RM">Relatif (RM)</button><button data-v="TM">Vrai (TM)</button></div></div>
+    <div class="row"><span class="lbl">Orientation</span><div class="seg" data-seg="orient"><button data-v="NU">North up</button><button data-v="CU">Course up</button><button data-v="HU">Head up</button></div></div>
+    <div class="row"><span class="lbl">Décentrage (RM)</span><div class="seg" data-seg="offMode"><button data-v="OFF">Centré</button><button data-v="FWD">Vue avant 50 %</button><button data-v="CUR">Au curseur (O)</button></div></div>
     <div class="row"><span class="lbl">Vecteurs</span><div class="seg" data-seg="vec"><button data-v="REL">Relatifs</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="vecMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button><button data-v="20">20'</button></div></div>
-    <div class="row"><span class="lbl">Stabilisation</span><div class="seg" data-seg="stab"><button data-v="GND">Sol (GPS)</button><button data-v="SEA">Eau (loch)</button></div></div>
+    <div class="row"><span class="lbl">Stabilisation</span><div class="seg" data-seg="stab"><button data-v="GND">Sol (GNSS)</button><button data-v="SEA">Eau (loch)</button></div></div>
     <div class="row"><span class="lbl">Sillages</span><div class="seg" data-seg="trail"><button data-v="OFF">Off</button><button data-v="REL">Rel.</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="trailMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button></div></div>
-    <div class="row"><span class="lbl">Anti-clutter mer</span><input type="range" id="acSl" min="0" max="100" value="35" style="flex:1"></div>
-    <div class="row"><span class="lbl">Alarme CPA</span><div class="seg" data-seg="cpaLim"><button data-v="0.5">0,5</button><button data-v="1">1,0</button><button data-v="1.5">1,5</button><button data-v="2">2,0 NM</button></div></div>
-    <div class="row"><span class="lbl">Alarme TCPA</span><div class="seg" data-seg="tcpaLim"><button data-v="6">6</button><button data-v="12">12</button><button data-v="20">20 min</button></div></div>
-    <div class="row"><span class="lbl">Acquisition auto</span><div class="seg" data-seg="autoAcq"><button data-v="0">Off</button><button data-v="1">On (&lt; 6 NM)</button></div></div>
-    <div class="row"><span class="lbl">EBL / VRM</span><span class="dim" style="flex:1">Touchez le scope hors écho pour placer l'EBL/VRM.</span><button data-act="eblClr">Effacer</button></div>
-    <p class="dim" style="font-size:11.5px">Stabilisation sol : vecteurs vrais = route/vitesse fond (fausse l'aspect dans le courant). Stabilisation eau : route/vitesse surface, donne le vrai aspect utile pour appliquer le RIPAM.</p>
+    <div class="row"><span class="lbl">Positions passées</span><div class="seg" data-seg="pastMin"><button data-v="0">Off</button><button data-v="0.5">30 s</button><button data-v="1">1 min</button><button data-v="2">2 min</button></div></div>
+    <h4>Vidéo</h4>
+    <div class="row"><span class="lbl">Bande</span><div class="seg" data-seg="band"><button data-v="X">X (3 cm)</button><button data-v="S">S (10 cm)</button></div></div>
+    <div class="row"><span class="lbl">Gain</span><input type="range" id="gainSl" min="0" max="100" style="flex:1"><b id="gainTxt" class="mono num"></b></div>
+    <div class="row"><span class="lbl">Anti-clutter mer</span><input type="range" id="seaSl" min="0" max="100" style="flex:1"><b id="seaTxt" class="mono num"></b><div class="seg" data-seg="seaAuto"><button data-v="1">Auto</button><button data-v="0">Man.</button></div></div>
+    <div class="row"><span class="lbl">Anti-clutter pluie</span><input type="range" id="rainSl" min="0" max="100" style="flex:1"><b id="rainTxt" class="mono num"></b></div>
+    <h4>Outils</h4>
+    <div class="row"><span class="lbl">Clic sur le scope</span><div class="seg" data-seg="tool"><button data-v="EV1">EBL/VRM 1</button><button data-v="EV2">EBL/VRM 2</button><button data-v="PI">Ligne PI</button><button data-v="NONE">Aucun</button></div></div>
+    <div class="row"><span class="lbl">Relèvements EBL</span><div class="seg" data-seg="eblRef"><button data-v="T">Vrais (T)</button><button data-v="R">Relatifs (R)</button></div><button data-act="clrEbl">Effacer EBL/VRM</button><button data-act="clrPi">Effacer PI</button></div>
+    <h4>Alertes de poursuite</h4>
+    <div class="row"><span class="lbl">Limite CPA</span><div class="seg" data-seg="cpaLim"><button data-v="0.5">0,5</button><button data-v="1">1,0</button><button data-v="1.5">1,5</button><button data-v="2">2,0 NM</button></div></div>
+    <div class="row"><span class="lbl">Limite TCPA</span><div class="seg" data-seg="tcpaLim"><button data-v="6">6</button><button data-v="12">12</button><button data-v="20">20 min</button></div></div>
+    <div class="row"><span class="lbl">Zone d'acquisition</span><div class="seg" data-seg="zone"><button data-v="0">Off</button><button data-v="6">6 NM</button><button data-v="12">12 NM</button></div></div>
   </section>
 
   <section class="tab" id="t-arpa">
     <div id="arpaTable"></div>
     <div id="selCard"></div>
-    <div class="row"><button data-act="dropSel">Annuler la cible</button><button data-act="dropAll">Annuler tout</button></div>
-    <h4>Manœuvre d'essai (trial)</h4>
-    <div class="row"><div class="seg" data-seg="trial"><button data-v="0">Off</button><button data-v="1">On</button></div><span class="dim">Vecteurs relatifs d'essai en orange</span></div>
-    <div class="row"><span class="lbl">Cap d'essai</span><button data-act="trH" data-v="-10">−10</button><button data-act="trH" data-v="-5">−5</button><b id="trHTxt" style="font-family:monospace;min-width:44px;text-align:center">000°</b><button data-act="trH" data-v="5">+5</button><button data-act="trH" data-v="10">+10</button></div>
-    <div class="row"><span class="lbl">Vitesse d'essai</span><button data-act="trS" data-v="-2">−2</button><button data-act="trS" data-v="-1">−1</button><b id="trSTxt" style="font-family:monospace;min-width:44px;text-align:center">0 kn</b><button data-act="trS" data-v="1">+1</button><button data-act="trS" data-v="2">+2</button></div>
-    <div class="row"><span class="lbl">Délai</span><div class="seg" data-seg="trialDelay"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5 min</button></div></div>
+    <div class="row"><button data-act="dropSel" title="Suppr">Annuler la cible</button><button data-act="dropAll">Annuler toutes</button><span id="capTxt" class="dim small"></span></div>
+    <h4>Manœuvre d'essai</h4>
+    <div class="row"><div class="seg" data-seg="trial"><button data-v="0">Off</button><button data-v="1">On (T)</button></div><span class="dim small">Vecteurs d'essai en orange</span></div>
+    <div class="row"><span class="lbl">Cap d'essai</span><button data-act="trH" data-v="-10">−10</button><button data-act="trH" data-v="-5">−5</button><b id="trHTxt" class="mono" style="min-width:44px;text-align:center">000°</b><button data-act="trH" data-v="5">+5</button><button data-act="trH" data-v="10">+10</button></div>
+    <div class="row"><span class="lbl">Vitesse d'essai</span><button data-act="trS" data-v="-2">−2</button><button data-act="trS" data-v="-1">−1</button><b id="trSTxt" class="mono" style="min-width:44px;text-align:center">0 kn</b><button data-act="trS" data-v="1">+1</button><button data-act="trS" data-v="2">+2</button></div>
+    <div class="row"><span class="lbl">Délai</span><div class="seg" data-seg="trialDelay"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5 min</button></div><span id="trCount" class="mono small"></span></div>
   </section>
 
   <section class="tab" id="t-exo">
-    <details open><summary>Comment ça marche</summary>
-      <p class="dim" style="font-size:12.5px">Touchez un écho pour l'acquérir à l'ARPA (données fiables après ~1 min, comme en vrai : le filtre a du retard quand la cible manœuvre). Touchez ailleurs pour placer EBL/VRM. Gouvernez au pilote auto ou à la barre, utilisez le transmetteur, testez vos options avec la manœuvre d'essai. Les autres navires appliquent le RIPAM… plus ou moins bien selon le réglage « Trafic ». L'onglet Bilan évalue chaque situation règle par règle. L'accélération du temps aide à faire défiler l'approche, mais repassez en ×1 ou ×2 pour manœuvrer.</p>
-    </details>
     <h4>Scénario</h4>
     <div class="scgrid" data-seg="scen"></div>
-    <p class="dim" id="scDesc" style="font-size:12px"></p>
+    <p class="dim small" id="scDesc"></p>
     <h4>Navire</h4>
     <p style="margin:4px 0">Pétrolier VLCC 320 m (KVLCC2), en charge, modèle hydrodynamique MMG.</p>
     <h4>Environnement</h4>
@@ -100,10 +118,30 @@
     <div class="row"><span class="lbl">Courant</span><span id="curTxt" style="flex:1"></span></div>
     <div class="row"><input type="range" id="cDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="cSpd" min="0" max="40" step="1" style="flex:1"></div>
     <div class="row"><span class="lbl">Visibilité</span><div class="seg" data-seg="vis"><button data-v="good">Bonne</button><button data-v="poor">Réduite (brume)</button></div></div>
+    <div class="row"><span class="lbl">Grains (pluie)</span><div class="seg" data-seg="rainEnv"><button data-v="0">Non</button><button data-v="1">Oui</button></div></div>
     <div class="row"><span class="lbl">Moment</span><div class="seg" data-seg="night"><button data-v="0">Jour</button><button data-v="1">Nuit</button></div></div>
     <div class="row"><span class="lbl">Trafic</span><div class="seg" data-seg="comp"><button data-v="disc">Discipliné</button><button data-v="real">Réaliste</button><button data-v="hostile">Imprévisible</button></div></div>
     <div class="row"><button data-act="randWx">Météo aléatoire</button><button class="go" data-act="newRun" style="flex:1">▶ Lancer l'exercice</button></div>
-    <p class="dim" style="font-size:11.5px">Limites actuelles : les cibles ne s'évitent pas entre elles, pas d'AIS, pas de DST ni de hauts-fonds, eau profonde uniquement. Outil d'entraînement complémentaire, non agréé STCW.</p>
+    <details open><summary>Commandes à la souris et au clavier</summary>
+      <table class="keys">
+        <tr><td>Clic sur un écho</td><td>acquérir / sélectionner la cible</td></tr>
+        <tr><td>Clic ailleurs</td><td>placer l'outil choisi (EBL/VRM 1, 2 ou ligne PI)</td></tr>
+        <tr><td>Molette / + −</td><td>échelle de distance</td></tr>
+        <tr><td>← →</td><td>cap ordonné ±1° (Maj : ±10°)</td></tr>
+        <tr><td>↑ ↓</td><td>transmetteur d'ordres</td></tr>
+        <tr><td>A</td><td>acquérir l'écho sous le curseur</td></tr>
+        <tr><td>Suppr</td><td>annuler la cible sélectionnée</td></tr>
+        <tr><td>1 / 2</td><td>EBL/VRM 1 / 2 au curseur</td></tr>
+        <tr><td>P</td><td>ligne PI au curseur</td></tr>
+        <tr><td>O</td><td>décentrer au curseur (recentrer : O à nouveau)</td></tr>
+        <tr><td>M</td><td>mouvement relatif / vrai</td></tr>
+        <tr><td>N</td><td>orientation (north / course / head up)</td></tr>
+        <tr><td>T</td><td>manœuvre d'essai</td></tr>
+        <tr><td>Entrée</td><td>acquitter les alertes</td></tr>
+        <tr><td>Espace</td><td>lecture / pause</td></tr>
+      </table>
+    </details>
+    <p class="dim small">Limites actuelles : les cibles ne s'évitent pas entre elles, pas d'AIS, pas de DST ni de côte, eau profonde uniquement. Outil d'entraînement complémentaire, non agréé STCW.</p>
   </section>
 
   <section class="tab" id="t-bilan">
@@ -128,7 +166,6 @@
 </div>
 </main>
 </div>
-
 <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

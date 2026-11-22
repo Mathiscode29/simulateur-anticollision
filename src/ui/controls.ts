@@ -1,12 +1,13 @@
-/** Interface : onglets, commandes passerelle, réglages radar, table ARPA, bilan. */
+/** Interface : commandes passerelle, réglages radar, alertes, table des cibles, bilan, clavier et souris. */
 import { S, logE, type Compliance, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
-import { brgOf, clamp, fMin, fT, n360, p3 } from '../core/util';
+import { brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
 import { SCEN, newScenario } from '../sim/scenarios';
-import { acquire, SWP } from '../sim/radar';
+import { ACQ_TIME, STABLE_TIME, SWP, acquire, cancelTrack, seaLevel, trialRemaining } from '../sim/radar';
+import { ackAlert, ackAll, sortedAlerts, TRACK_CAPACITY } from '../sim/alerts';
 import { finish } from '../sim/assessment';
 import { visual } from '../sim/visual';
-import { geo } from './render';
+import { cursor, geo, resetTM } from './render';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const $in = (id: string) => document.getElementById(id) as HTMLInputElement;
@@ -19,52 +20,144 @@ export function showTab(n: string): void {
 
 let hdgT: number | undefined, rudT: number | undefined;
 const rudTxt = (v: number) => (v === 0 ? 'à zéro' : (v < 0 ? 'bâbord ' : 'tribord ') + Math.abs(v) + '°');
+const R = () => S.radar;
+
+function setPalette(p: RadarSettings['palette']): void {
+  R().palette = p;
+  document.body.classList.remove('pal-day', 'pal-dusk', 'pal-night');
+  document.body.classList.add(p === 'DAY' ? 'pal-day' : p === 'NIGHT' ? 'pal-night' : 'pal-dusk');
+}
+function setMotion(m: RadarSettings['motion']): void {
+  R().motion = m;
+  if (m === 'TM') { if (R().orient === 'HU') R().orient = 'NU'; resetTM(); }
+}
+function setOrient(o: RadarSettings['orient']): void {
+  if (o === 'HU' && R().motion === 'TM') R().motion = 'RM'; // Head up : mouvement relatif seulement
+  R().orient = o;
+  if (o === 'CU') R().cuRef = Math.round(S.own.hdg);
+}
+function setTrial(on: boolean): void {
+  R().trial = on;
+  if (on) { R().trialHdg = Math.round(S.own.hdg); R().trialSpd = Math.round(S.own.stw); R().trialT0 = S.t; }
+}
 
 interface Seg { g: () => string; s: (v: string) => void }
 const SEGS: Record<string, Seg> = {
   ts: { g: () => String(S.ts), s: (v) => (S.ts = +v) },
+  palette: { g: () => R().palette, s: (v) => setPalette(v as RadarSettings['palette']) },
   ap: { g: () => (S.own.ap ? '1' : '0'), s: (v) => {
     const o = S.own; o.ap = v === '1';
     if (o.ap) { o.cmdHdg = Math.round(o.hdg); logE(`Pilote auto, cap ${p3(o.cmdHdg)}°`); } else { o.manRud = Math.round(o.rud); logE('Barre manuelle'); }
   } },
   rudLim: { g: () => String(S.own.rudLim), s: (v) => (S.own.rudLim = +v) },
-  orient: { g: () => S.radar.orient, s: (v) => { S.radar.orient = v as RadarSettings['orient']; if (v === 'CU') S.radar.cuRef = Math.round(S.own.hdg); } },
-  vec: { g: () => S.radar.vec, s: (v) => (S.radar.vec = v as RadarSettings['vec']) },
-  vecMin: { g: () => String(S.radar.vecMin), s: (v) => (S.radar.vecMin = +v) },
-  stab: { g: () => S.radar.stab, s: (v) => (S.radar.stab = v as RadarSettings['stab']) },
-  trail: { g: () => S.radar.trail, s: (v) => (S.radar.trail = v as RadarSettings['trail']) },
-  trailMin: { g: () => String(S.radar.trailMin), s: (v) => (S.radar.trailMin = +v) },
-  cpaLim: { g: () => String(S.radar.cpaLim), s: (v) => (S.radar.cpaLim = +v) },
-  tcpaLim: { g: () => String(S.radar.tcpaLim), s: (v) => (S.radar.tcpaLim = +v) },
-  autoAcq: { g: () => (S.radar.autoAcq ? '1' : '0'), s: (v) => (S.radar.autoAcq = v === '1') },
-  trial: { g: () => (S.radar.trial ? '1' : '0'), s: (v) => {
-    S.radar.trial = v === '1';
-    if (S.radar.trial) { S.radar.trialHdg = Math.round(S.own.hdg); S.radar.trialSpd = Math.round(S.own.stw); }
-  } },
-  trialDelay: { g: () => String(S.radar.trialDelay), s: (v) => (S.radar.trialDelay = +v) },
+  motion: { g: () => R().motion, s: (v) => setMotion(v as RadarSettings['motion']) },
+  orient: { g: () => R().orient, s: (v) => setOrient(v as RadarSettings['orient']) },
+  offMode: { g: () => R().offMode, s: (v) => { R().offMode = v as RadarSettings['offMode']; if (v === 'CUR') offAtCursor(); } },
+  vec: { g: () => R().vec, s: (v) => (R().vec = v as RadarSettings['vec']) },
+  vecMin: { g: () => String(R().vecMin), s: (v) => (R().vecMin = +v) },
+  stab: { g: () => R().stab, s: (v) => (R().stab = v as RadarSettings['stab']) },
+  trail: { g: () => R().trail, s: (v) => (R().trail = v as RadarSettings['trail']) },
+  trailMin: { g: () => String(R().trailMin), s: (v) => (R().trailMin = +v) },
+  pastMin: { g: () => String(R().pastMin), s: (v) => (R().pastMin = +v) },
+  band: { g: () => R().band, s: (v) => { R().band = v as RadarSettings['band']; logE(`Radar bande ${v}`); } },
+  seaAuto: { g: () => (R().seaAuto ? '1' : '0'), s: (v) => (R().seaAuto = v === '1') },
+  tool: { g: () => R().tool, s: (v) => (R().tool = v as RadarSettings['tool']) },
+  eblRef: { g: () => R().eblRef, s: (v) => (R().eblRef = v as RadarSettings['eblRef']) },
+  cpaLim: { g: () => String(R().cpaLim), s: (v) => (R().cpaLim = +v) },
+  tcpaLim: { g: () => String(R().tcpaLim), s: (v) => (R().tcpaLim = +v) },
+  zone: { g: () => String(R().zone), s: (v) => (R().zone = +v) },
+  trial: { g: () => (R().trial ? '1' : '0'), s: (v) => setTrial(v === '1') },
+  trialDelay: { g: () => String(R().trialDelay), s: (v) => { R().trialDelay = +v; R().trialT0 = S.t; } },
   vis: { g: () => S.env.vis, s: (v) => { S.env.vis = v as Visibility; logE(v === 'poor' ? 'Visibilité réduite' : 'Bonne visibilité'); } },
+  rainEnv: { g: () => (S.env.rain ? '1' : '0'), s: (v) => { S.env.rain = v === '1'; if (!S.env.rain) S.rainCells = []; } },
   night: { g: () => (S.env.night ? '1' : '0'), s: (v) => (S.env.night = v === '1') },
   comp: { g: () => S.env.comp, s: (v) => (S.env.comp = v as Compliance) },
   scen: { g: () => S.scen, s: (v) => { S.scen = v; const sc = SCEN[v]; if (sc.vis) S.env.vis = sc.vis; } },
 };
 
+let audio: AudioContext | null = null;
+function ensureAudio(): void {
+  if (!audio) { try { audio = new AudioContext(); } catch { audio = null; } }
+}
+function beep(freq: number, dur: number, delay = 0): void {
+  if (!audio) return;
+  try {
+    const t = audio.currentTime + delay, o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = freq; o.type = 'square'; g.gain.value = 0.04;
+    o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + dur);
+  } catch { /* son indisponible */ }
+}
+
+function stepTele(d: number): void {
+  const o = S.own, n = clamp(o.tele + d, 0, TELE.length - 1);
+  if (n !== o.tele) { o.tele = n; logE(`Machine : ${TELE[n].n}`); }
+}
+function stepHdg(d: number): void {
+  const o = S.own;
+  if (!o.ap) { o.ap = true; o.cmdHdg = Math.round(o.hdg); }
+  o.cmdHdg = n360(Math.round(o.cmdHdg) + d);
+  clearTimeout(hdgT);
+  hdgT = window.setTimeout(() => logE(`Cap ordonné ${p3(S.own.cmdHdg)}°`), 1200);
+}
+function rangeStep(d: number): void {
+  const i = clamp(RANGES.indexOf(R().range) + d, 0, RANGES.length - 1);
+  R().range = RANGES[i];
+}
+/** Position du curseur, relative au porteur (NM). */
+function cursorRel(): { x: number; y: number } | null {
+  if (cursor.x === null || cursor.y === null) return null;
+  const G = geo(), p = G.inv(cursor.x, cursor.y);
+  return { x: p.x - S.own.x, y: p.y - S.own.y };
+}
+function offAtCursor(): void {
+  const c = cursorRel();
+  if (c) R().off = c;
+}
+function setEV(i: 0 | 1, rel: { x: number; y: number }): void {
+  R().ebl[i] = brgOf(rel.x, rel.y); R().vrm[i] = Math.hypot(rel.x, rel.y);
+}
+let piNext = 0;
+function setPI(rel: { x: number; y: number }): void {
+  const b = S.own.hdg, n = vec(b + 90, 1);
+  R().pi[piNext] = { b, d: rel.x * n.x + rel.y * n.y };
+  piNext = (piNext + 1) % 4;
+}
+/** Cible (piste ou écho) la plus proche d'un point écran, à moins de 22 px. */
+function pickAt(px: number, py: number): { tr?: number; tid?: number } | null {
+  const G = geo();
+  let best: { tr?: number; tid?: number } | null = null, bd = 22;
+  for (const tr of S.tracks) {
+    if (!tr.est) continue;
+    const q = G.Wp(tr.est.x, tr.est.y), d = Math.hypot(q[0] - px, q[1] - py);
+    if (d < bd) { bd = d; best = { tr: tr.n }; }
+  }
+  for (const t of S.targets) {
+    if (!t.echo || S.t - t.echo.t > SWP * 1.1) continue;
+    const q = G.Wp(t.echo.x, t.echo.y), d = Math.hypot(q[0] - px, q[1] - py);
+    if (d < bd) { bd = d; best = { tid: t.id }; }
+  }
+  return best;
+}
+function acquireOrSelect(p: { tr?: number; tid?: number }): void {
+  if (p.tr !== undefined) { S.sel = p.tr; return; }
+  const ex = S.tracks.find((k) => k.tid === p.tid);
+  if (ex) { S.sel = ex.n; return; }
+  const t = S.targets.find((x) => x.id === p.tid);
+  if (t) acquire(t, false);
+}
+
 const ACT: Record<string, (v: string) => void> = {
   play() { if (S.over) newScenario(); S.started = true; S.paused = !S.paused; },
-  hdg(v) {
-    const o = S.own;
-    if (!o.ap) { o.ap = true; o.cmdHdg = Math.round(o.hdg); }
-    o.cmdHdg = n360(Math.round(o.cmdHdg) + +v);
-    clearTimeout(hdgT);
-    hdgT = window.setTimeout(() => logE(`Cap ordonné ${p3(S.own.cmdHdg)}°`), 1200);
-  },
+  hdg(v) { stepHdg(+v); },
   rud(v) { const o = S.own; o.ap = false; o.manRud = +v; $in('rudSl').value = v; logE(`Barre ${rudTxt(+v)}`); },
   tele(v) { S.own.tele = +v; logE(`Machine : ${TELE[+v].n}`); },
-  rng(v) { const i = clamp(RANGES.indexOf(S.radar.range) + +v, 0, RANGES.length - 1); S.radar.range = RANGES[i]; },
-  dropSel() { S.tracks = S.tracks.filter((k) => k.n !== S.sel); S.sel = null; },
-  dropAll() { S.tracks = []; S.sel = null; },
-  trH(v) { S.radar.trialHdg = n360(S.radar.trialHdg + +v); },
-  trS(v) { S.radar.trialSpd = clamp(S.radar.trialSpd + +v, 0, S.own.ship.max); },
-  eblClr() { S.radar.ebl = null; },
+  rng(v) { rangeStep(+v); },
+  dropSel() { if (S.sel !== null) cancelTrack(S.sel); },
+  dropAll() { for (const tr of [...S.tracks]) cancelTrack(tr.n); },
+  trH(v) { R().trialHdg = n360(R().trialHdg + +v); },
+  trS(v) { R().trialSpd = clamp(R().trialSpd + +v, 0, S.own.ship.max); },
+  clrEbl() { R().ebl = [null, null]; R().vrm = [null, null]; },
+  clrPi() { R().pi = [null, null, null, null]; piNext = 0; },
   randWx() {
     const e = S.env;
     e.windFrom = Math.round(Math.random() * 35) * 10; e.windKn = Math.round(4 + Math.random() * 28);
@@ -73,11 +166,12 @@ const ACT: Record<string, (v: string) => void> = {
   },
   newRun() { newScenario(); S.started = true; S.paused = false; showTab('barre'); },
   finish() { if (!S.over && S.started) finish(); },
+  ackAll() { ackAll(); },
+  silence() { S.silencedUntil = performance.now() + 30000; },
 };
 
 const BFT = [1, 4, 7, 11, 17, 22, 28, 34, 41, 48, 56, 64];
 const bft = (k: number) => { const i = BFT.findIndex((x) => k < x); return i < 0 ? 12 : i; };
-
 function syncEnv(): void {
   const e = S.env;
   $in('wDir').value = String(e.windFrom); $in('wSpd').value = String(e.windKn);
@@ -94,22 +188,43 @@ const fmtR = (v: number) => { v = Math.round(v); return v === 0 ? '0' : (v < 0 ?
 
 let reportShown: object | null = null;
 function renderReport(): void {
-  const R = S.report;
-  if (!R || reportShown === R) return;
-  reportShown = R;
-  const col = R.score >= 85 ? 'var(--ok)' : R.score >= 70 ? 'var(--ac)' : R.score >= 50 ? 'var(--wn)' : 'var(--bd)';
+  const Rp = S.report;
+  if (!Rp || reportShown === Rp) return;
+  reportShown = Rp;
+  const col = Rp.score >= 85 ? 'var(--ok)' : Rp.score >= 70 ? 'var(--ac)' : Rp.score >= 50 ? 'var(--wn)' : 'var(--bd)';
   const msgs = (m: [string, string][]) => m.map((x) => `<div class="msg ${x[0]}">${esc(x[1])}</div>`).join('');
-  let h = `<div class="card"><div class="score" style="color:${col}">${R.score}/100</div><div>${esc(R.grade)} · ${esc(R.scen)} · durée ${fT(R.duration)}</div>${msgs(R.global)}</div>`;
-  if (!R.items.length) h += "<p class=\"dim\">Aucune situation de risque ne s'est établie (CPA toujours > 1 NM).</p>";
-  for (const it of R.items) {
+  let h = `<div class="card"><div class="score" style="color:${col}">${Rp.score}/100</div><div>${esc(Rp.grade)} · ${esc(Rp.scen)} · durée ${fT(Rp.duration)}</div>${msgs(Rp.global)}</div>`;
+  if (!Rp.items.length) h += "<p class=\"dim\">Aucune situation de risque ne s'est établie (CPA toujours > 1 NM).</p>";
+  for (const it of Rp.items) {
     h += `<div class="card"><b>${esc(it.label)}</b> <span class="dim">· ${esc(it.name)} ${it.L} m</span><div style="color:var(--ac);font-size:12px;margin:3px 0">${esc(it.role)}</div>${msgs(it.msgs)}<div class="msg info">L'autre navire : ${esc(it.other)}.</div></div>`;
   }
   $('report').innerHTML = h;
   showTab('bilan');
 }
 
+let lastAlertsHTML = '';
+function renderAlerts(): void {
+  const list = sortedAlerts();
+  const html = list.length
+    ? list.map((a) => `<div class="al ${a.cat}${a.acked ? '' : ' unack'}${a.active ? '' : ' gone'}"><span class="ic">${a.cat === 'alarm' ? '▲' : a.cat === 'warning' ? '●' : '◆'}</span>`
+      + `<span class="tx">${esc(a.text)}${a.active ? '' : ' — disparue'}</span><span class="tm">T+${fT(a.t0)}</span>${a.acked ? '' : `<button data-ack="${a.id}">ACQ</button>`}</div>`).join('')
+    : '<div class="none">Aucune alerte</div>';
+  if (html !== lastAlertsHTML) { $('alerts').innerHTML = html; lastAlertsHTML = html; }
+  const unack = list.filter((a) => !a.acked).length;
+  $('alertCount').textContent = list.length ? `${list.length} (${unack} non acquittée${unack > 1 ? 's' : ''})` : '';
+}
+
+const seenWarn = new Set<string>();
+let tick = 0;
+function soundTick(): void {
+  tick++;
+  if (S.paused || performance.now() < S.silencedUntil) return;
+  if (S.alerts.some((a) => a.cat === 'alarm' && !a.acked) && tick % 2 === 0) { beep(880, 0.12); beep(880, 0.12, 0.2); }
+  for (const a of S.alerts) if (a.cat === 'warning' && !a.acked && !seenWarn.has(a.id)) { seenWarn.add(a.id); beep(660, 0.25); }
+}
+
 export function upd(): void {
-  const o = S.own, R = S.radar, e = S.env;
+  const o = S.own, Rs = S.radar, e = S.env;
   $('clock').textContent = 'T+' + fT(S.t);
   $('play').textContent = S.paused ? '▶' : '⏸';
   const sog = Math.hypot(o.vx, o.vy);
@@ -121,7 +236,7 @@ export function upd(): void {
   $('nRot').textContent = (o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60) + '°/min';
   $('nCmd').textContent = o.ap ? p3(o.cmdHdg) + '°' : 'manuel';
   $('nTel').textContent = `${TELE[o.tele].n} · ${Math.round(o.n * 60)} tr/min`;
-  $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'} · ${SCEN[S.scen].n}`;
+  $('nEnv').textContent = `Vent ${p3(e.windFrom)}°/${e.windKn} kn · Courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'Brume' : 'Bonne visibilité'}${e.rain ? ' · Grains' : ''} · ${SCEN[S.scen].n}`;
   document.querySelectorAll<HTMLElement>('[data-seg]').forEach((sg) => {
     const k = SEGS[sg.dataset.seg!];
     if (!k) return;
@@ -134,51 +249,52 @@ export function upd(): void {
   $('cmdTxt').textContent = p3(o.cmdHdg);
   $('rudTxt').textContent = fmtR(o.manRud) + '°';
   $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${o.ship.max} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`;
-  $('rngTxt').textContent = R.range + ' NM';
-  $('trHTxt').textContent = p3(R.trialHdg) + '°';
-  $('trSTxt').textContent = R.trialSpd + ' kn';
+  $('rngTxt').textContent = Rs.range + ' NM';
+  $('trHTxt').textContent = p3(Rs.trialHdg) + '°';
+  $('trSTxt').textContent = Rs.trialSpd + ' kn';
+  const rem = trialRemaining();
+  $('trCount').textContent = Rs.trial ? (rem > 0 ? `manœuvre dans ${fT(rem)}` : 'manœuvre immédiate') : '';
   $('scDesc').textContent = SCEN[S.scen].d;
+  const sliders: [string, number][] = [['gainSl', Rs.gain], ['seaSl', Math.round(seaLevel() * 100)], ['rainSl', Rs.rain]];
+  for (const [id, val] of sliders) {
+    const el = $in(id);
+    if (document.activeElement !== el) el.value = String(val);
+    $(id.replace('Sl', 'Txt')).textContent = String(val);
+  }
+  $('capTxt').textContent = `${S.tracks.length}/${TRACK_CAPACITY} cibles suivies`;
 
-  // table ARPA
+  // table des cibles
   if (!S.tracks.length) {
-    $('arpaTable').innerHTML = "<p class=\"dim\">Aucune cible acquise. Touchez un écho sur le scope pour l'acquérir, ou activez l'acquisition auto (onglet Radar).</p>";
+    $('arpaTable').innerHTML = "<p class=\"dim\">Aucune cible suivie. Cliquez sur un écho (ou touche A sous le curseur), ou activez une zone d'acquisition (onglet Radar).</p>";
   } else {
-    let h = `<table class="t"><tr><th>N°</th><th>Dist</th><th>Rlv</th><th>CPA</th><th>TCPA</th><th>BCR</th>${R.trial ? '<th>CPA ess.</th>' : ''}</tr>`;
+    let h = `<table class="t"><tr><th>N°</th><th>Dist</th><th>Rlv</th><th>CPA</th><th>TCPA</th><th>BCR</th><th>Route</th><th>Vit</th>${Rs.trial ? '<th>CPA ess.</th>' : ''}</tr>`;
     for (const tr of [...S.tracks].sort((a, b) => a.n - b.n)) {
       if (!tr.est) continue;
       const ok = tr.state === 'TRK';
       h += `<tr data-n="${tr.n}" class="${S.sel === tr.n ? 'sel' : ''} ${tr.danger ? 'dg' : ''}"><td>${tr.n}${tr.state === 'ACQ' ? '…' : tr.state === 'LOST' ? ' ⚠' : ''}</td><td>${tr.range.toFixed(1)}</td><td>${p3(tr.brg)}</td>`
         + `<td>${ok ? tr.cpa.toFixed(2) : '—'}</td><td>${ok && isFinite(tr.tcpa) ? (tr.tcpa / 60).toFixed(1) : '—'}</td>`
         + `<td>${ok && tr.bcr !== null ? (tr.bcr >= 0 ? 'Av ' : 'Ar ') + Math.abs(tr.bcr).toFixed(1) : '—'}</td>`
-        + (R.trial ? `<td>${ok && tr.trial ? (tr.trial.tcpa > 0 ? tr.trial.cpa.toFixed(2) : 'ouvre') : '—'}</td>` : '') + '</tr>';
+        + `<td>${ok ? p3(tr.crs) : '—'}</td><td>${ok ? tr.spd.toFixed(1) : '—'}</td>`
+        + (Rs.trial ? `<td>${ok && tr.trial ? (tr.trial.tcpa > 0 ? tr.trial.cpa.toFixed(2) : 'ouvre') : '—'}</td>` : '') + '</tr>';
     }
     $('arpaTable').innerHTML = h + '</table>';
   }
   const tr = S.tracks.find((k) => k.n === S.sel);
   if (tr && tr.est) {
-    const t = S.targets.find((x) => x.id === tr.tid), ok = tr.state === 'TRK';
-    $('selCard').innerHTML = `<div class="card"><b>Cible ${tr.n}</b><span class="tag">${tr.state === 'ACQ' ? 'ACQUISITION' : tr.state === 'LOST' ? 'PERDUE' : 'SUIVIE'}</span>
-    <div class="kv"><span>Distance</span><b>${tr.range.toFixed(2)} NM</b><span>Relèvement vrai</span><b>${tr.brg.toFixed(1)}°</b>
-    <span>CPA / TCPA</span><b>${ok ? tr.cpa.toFixed(2) + ' NM / ' + (isFinite(tr.tcpa) ? fMin(tr.tcpa) : '—') : '…'}</b>
-    <span>Évol. relèvement</span><b>${ok ? (tr.brate >= 0 ? '+' : '') + tr.brate.toFixed(2) + '°/min' : '…'}</b>
-    <span>Route / vitesse ${R.stab === 'GND' ? 'fond' : 'surface'}</span><b>${ok ? p3(tr.crs) + '° / ' + tr.spd.toFixed(1) + ' kn' : '…'}</b>
-    <span>BCR / BCT</span><b>${ok && tr.bcr !== null && tr.bct !== null ? (tr.bcr >= 0 ? 'avant ' : 'arrière ') + Math.abs(tr.bcr).toFixed(2) + ' NM / ' + fMin(tr.bct) : '—'}</b>
-    ${R.trial && ok && tr.trial ? `<span style="color:#ff9f1c">Essai CPA / TCPA</span><b style="color:#ff9f1c">${tr.trial.tcpa > 0 ? tr.trial.cpa.toFixed(2) + ' NM / ' + fMin(tr.trial.tcpa) : 'distance croissante'}</b>` : ''}</div>
+    const t = S.targets.find((x) => x.id === tr.tid), ok = tr.state === 'TRK', age = S.t - tr.t0;
+    const st = tr.state === 'ACQ' ? 'ACQUISITION' : tr.state === 'LOST' ? 'PERDUE' : age < STABLE_TIME ? 'TENDANCE' : 'PRÉDICTION';
+    $('selCard').innerHTML = `<div class="card"><b>Cible ${tr.n}</b><span class="tag">${st}</span>
+    <div class="kv"><span>Source</span><b>Radar (poursuite TT), suivie depuis ${fT(age)}</b>
+    <span>Distance / relèvement</span><b>${tr.range.toFixed(2)} NM / ${tr.brg.toFixed(1)}°T</b>
+    <span>CPA / TCPA</span><b>${ok ? tr.cpa.toFixed(2) + ' NM / ' + (isFinite(tr.tcpa) ? fMin(tr.tcpa) : '—') : `disponible après ${ACQ_TIME} s`}</b>
+    <span>Route / vitesse vraies</span><b>${ok ? p3(tr.crs) + '° / ' + tr.spd.toFixed(1) + ' kn (' + (Rs.stab === 'GND' ? 'fond' : 'surface') + ')' : '…'}</b>
+    <span>Évolution du relèvement</span><b>${ok ? (tr.brate >= 0 ? '+' : '') + tr.brate.toFixed(2) + '°/min' : '…'}</b>
+    <span>BCR / BCT</span><b>${ok && tr.bcr !== null && tr.bct !== null ? (tr.bcr >= 0 ? "sur l'avant " : "sur l'arrière ") + Math.abs(tr.bcr).toFixed(2) + ' NM / ' + fMin(tr.bct) : '—'}</b>
+    ${Rs.trial && ok && tr.trial ? `<span style="color:var(--wn)">Essai CPA / TCPA</span><b style="color:var(--wn)">${tr.trial.tcpa > 0 ? tr.trial.cpa.toFixed(2) + ' NM / ' + fMin(tr.trial.tcpa) : 'distance croissante'}</b>` : ''}</div>
     <div style="margin-top:6px;font-size:12.5px"><span class="dim">Observation :</span> ${t ? esc(visual(t)) : '—'}</div></div>`;
   } else $('selCard').innerHTML = '';
 
-  // alarmes
-  const al = $('alarm'), dg = S.tracks.filter((k) => k.danger).map((k) => k.n), lost = S.tracks.filter((k) => k.state === 'LOST').map((k) => k.n);
-  if (S.collided !== null) { al.className = 'bad'; al.textContent = 'ABORDAGE'; }
-  else if (dg.length || lost.length) {
-    al.className = 'bad';
-    al.textContent = [dg.length ? 'CPA/TCPA : ' + dg.join(', ') : '', lost.length ? 'PERDUE : ' + lost.join(', ') : ''].filter(Boolean).join(' · ');
-  } else {
-    const en = Object.values(S.enc);
-    const clear = S.started && !S.over && en.length > 0 && en.every((x) => x.closed)
-      && S.targets.every((t) => S.enc[t.id] || Math.hypot(t.x - o.x, t.y - o.y) > 8);
-    if (clear) { al.className = 'info'; al.textContent = 'Situations dégagées · Bilan > Terminer'; } else al.className = '';
-  }
+  renderAlerts();
   $('log').innerHTML = S.log.slice(0, 60).map((l) => `<div class="${l.cls}">T+${fT(l.t)} ${esc(l.txt)}</div>`).join('');
   renderReport();
 }
@@ -186,7 +302,9 @@ export function upd(): void {
 export function initControls(canvas: HTMLCanvasElement): void {
   document.querySelector('.scgrid')!.innerHTML = Object.entries(SCEN).map(([k, s]) => `<button data-v="${k}">${esc(s.n)}</button>`).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
+  setPalette(R().palette);
 
+  document.addEventListener('pointerdown', ensureAudio);
   document.addEventListener('click', (ev) => {
     const b = (ev.target as HTMLElement).closest('button') as HTMLButtonElement | null;
     if (!b) return;
@@ -195,9 +313,14 @@ export function initControls(canvas: HTMLCanvasElement): void {
     if (sg && b.dataset.v !== undefined && SEGS[sg.dataset.seg!]) { SEGS[sg.dataset.seg!].s(b.dataset.v); upd(); return; }
     if (b.dataset.act && ACT[b.dataset.act]) { ACT[b.dataset.act](b.dataset.v ?? ''); upd(); }
   });
+  // listes rafraîchies en continu : action dès l'appui
   $('arpaTable').addEventListener('pointerdown', (ev) => {
     const tr = (ev.target as HTMLElement).closest('tr[data-n]') as HTMLElement | null;
     if (tr) { S.sel = +tr.dataset.n!; upd(); }
+  });
+  $('alerts').addEventListener('pointerdown', (ev) => {
+    const b = (ev.target as HTMLElement).closest('button[data-ack]') as HTMLElement | null;
+    if (b) { ackAlert(b.dataset.ack!); upd(); }
   });
   $in('rudSl').addEventListener('input', (e) => {
     const o = S.own; o.ap = false; o.manRud = +(e.target as HTMLInputElement).value;
@@ -205,7 +328,9 @@ export function initControls(canvas: HTMLCanvasElement): void {
     rudT = window.setTimeout(() => logE(`Barre ${rudTxt(o.manRud)}`), 900);
     upd();
   });
-  $in('acSl').addEventListener('input', (e) => { S.radar.ac = +(e.target as HTMLInputElement).value / 100; });
+  $in('gainSl').addEventListener('input', (e) => { R().gain = +(e.target as HTMLInputElement).value; });
+  $in('seaSl').addEventListener('input', (e) => { R().sea = +(e.target as HTMLInputElement).value; R().seaAuto = false; });
+  $in('rainSl').addEventListener('input', (e) => { R().rain = +(e.target as HTMLInputElement).value; });
   for (const id of ['wDir', 'wSpd', 'cDir', 'cSpd']) {
     $in(id).addEventListener('input', () => {
       const e = S.env;
@@ -214,31 +339,57 @@ export function initControls(canvas: HTMLCanvasElement): void {
     });
   }
 
-  // scope : toucher un écho = acquisition / sélection ; ailleurs = EBL/VRM
+  // scope : curseur, clic, molette
+  const setCursor = (ev: PointerEvent | MouseEvent) => {
+    const rc = canvas.getBoundingClientRect();
+    cursor.x = ev.clientX - rc.left; cursor.y = ev.clientY - rc.top;
+  };
+  canvas.addEventListener('pointermove', setCursor);
+  canvas.addEventListener('pointerleave', () => { cursor.x = null; cursor.y = null; });
   canvas.addEventListener('pointerdown', (ev) => {
-    const rc = canvas.getBoundingClientRect(), px = ev.clientX - rc.left, py = ev.clientY - rc.top, G = geo(), o = S.own;
-    let best: { kind: 'tr'; n: number } | { kind: 't'; id: number } | null = null, bd = 22;
-    for (const tr of S.tracks) {
-      if (!tr.est) continue;
-      const q = G.P(tr.est.x - o.x, tr.est.y - o.y), d = Math.hypot(q[0] - px, q[1] - py);
-      if (d < bd) { bd = d; best = { kind: 'tr', n: tr.n }; }
-    }
-    for (const t of S.targets) {
-      if (!t.echo || S.t - t.echo.t > SWP * 1.1) continue;
-      const q = G.P(t.echo.dx, t.echo.dy), d = Math.hypot(q[0] - px, q[1] - py);
-      if (d < bd) { bd = d; best = { kind: 't', id: t.id }; }
-    }
-    if (best) {
-      if (best.kind === 'tr') S.sel = best.n;
-      else {
-        const id = best.id, ex = S.tracks.find((k) => k.tid === id);
-        if (ex) S.sel = ex.n; else { const t = S.targets.find((x) => x.id === id); if (t) acquire(t, false); }
+    setCursor(ev);
+    const p = pickAt(cursor.x!, cursor.y!);
+    if (p) acquireOrSelect(p);
+    else {
+      const rel = cursorRel();
+      if (rel) {
+        if (R().tool === 'EV1') setEV(0, rel);
+        else if (R().tool === 'EV2') setEV(1, rel);
+        else if (R().tool === 'PI') setPI(rel);
       }
-    } else {
-      const p = G.inv(px, py), r = Math.hypot(p.x, p.y);
-      if (r <= S.radar.range * 1.05) S.radar.ebl = { b: brgOf(p.x, p.y), r };
     }
     upd();
   });
+  canvas.addEventListener('wheel', (ev) => { ev.preventDefault(); rangeStep(ev.deltaY > 0 ? 1 : -1); upd(); }, { passive: false });
+
+  // clavier
+  document.addEventListener('keydown', (ev) => {
+    const tg = ev.target as HTMLElement;
+    if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA')) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    ensureAudio();
+    const k = ev.key;
+    let done = true;
+    if (k === ' ') ACT.play('');
+    else if (k === 'ArrowLeft') stepHdg(ev.shiftKey ? -10 : -1);
+    else if (k === 'ArrowRight') stepHdg(ev.shiftKey ? 10 : 1);
+    else if (k === 'ArrowUp') stepTele(1);
+    else if (k === 'ArrowDown') stepTele(-1);
+    else if (k === '+' || k === '=') rangeStep(1);
+    else if (k === '-' || k === '_') rangeStep(-1);
+    else if (k === 'a' || k === 'A') { if (cursor.x !== null && cursor.y !== null) { const p = pickAt(cursor.x, cursor.y); if (p) acquireOrSelect(p); } }
+    else if (k === 'Delete' || k === 'Backspace') ACT.dropSel('');
+    else if (k === '1' || k === '2') { const c = cursorRel(); if (c) setEV(k === '1' ? 0 : 1, c); }
+    else if (k === 'p' || k === 'P') { const c = cursorRel(); if (c) setPI(c); }
+    else if (k === 'o' || k === 'O') { if (R().offMode === 'OFF') { R().offMode = 'CUR'; offAtCursor(); } else R().offMode = 'OFF'; }
+    else if (k === 'm' || k === 'M') setMotion(R().motion === 'RM' ? 'TM' : 'RM');
+    else if (k === 'n' || k === 'N') { const seq: RadarSettings['orient'][] = R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU']; setOrient(seq[(seq.indexOf(R().orient) + 1) % seq.length]); }
+    else if (k === 't' || k === 'T') setTrial(!R().trial);
+    else if (k === 'Enter') ackAll();
+    else done = false;
+    if (done) { ev.preventDefault(); upd(); }
+  });
+
+  setInterval(soundTick, 1000);
   syncEnv();
 }

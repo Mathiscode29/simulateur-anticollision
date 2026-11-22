@@ -11,7 +11,7 @@ function start(scen: string, comp: 'disc' | 'real' | 'hostile' = 'real'): void {
   S.env.comp = comp;
   newScenario();
   S.started = true;
-  S.radar.autoAcq = true;
+  S.radar.zone = 12;
 }
 const run = (minutes: number, each?: () => void) => {
   for (let i = 0; i < minutes * 240; i++) { simStep(); each?.(); if (S.over) break; }

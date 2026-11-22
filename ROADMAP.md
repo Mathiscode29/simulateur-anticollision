@@ -33,11 +33,13 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Interaction entre cibles (elles s'évitent entre elles)
 
 ## Phase 3 — Interface professionnelle (priorité ordinateur)
-- [ ] Présentation radar conforme IEC 62388 / MSC.192(79) (cartouches, curseur, données cibles, symbologie)
+- [x] Présentation radar selon MSC.192(79) / SN.1/Circ.243 : échelles, RM/TM, décentrage, 2 EBL/VRM, 4 PI, curseur, symboles, positions passées, données cible (grille : docs/conformite-radar.md)
+- [x] Vidéo : gain, anti-clutter mer (auto/manuel) et pluie, bandes X/S, grains
+- [x] Gestion des alertes (alarme / avertissement / attention, acquittement, son)
+- [x] Mise en page poste fixe et raccourcis clavier ; palettes jour / crépuscule / nuit
 - [ ] AIS avec ses erreurs (latence, cap/vitesse faux, cibles sans AIS)
-- [ ] Gestion des alertes (alarmes, avertissements, acquittement)
+- [ ] Confrontation à la norme d'essai IEC 62388
 - [ ] ECDIS simplifié
-- [ ] Mise en page poste fixe (≥ 1280 px) : radar plein écran, conning, panneaux latéraux
 - [ ] Interface en anglais (langue de travail des équipages internationaux)
 - [ ] Ordres à la barre à la voix en anglais SMCP (reconnaissance vocale du navigateur)
 

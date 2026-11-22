@@ -1,16 +1,35 @@
 /**
- * Rendu du scope radar (PPI) sur canvas 2D : clutter, échos, sillages, cercles, ligne de foi,
- * symboles ARPA, vecteurs, EBL/VRM, balayage, graduation et cartouches.
- * Symbologie à faire évoluer vers IEC 62388 (voir ROADMAP.md, phase 3).
+ * Rendu du scope radar (PPI) sur canvas 2D.
+ *
+ * Présentation et symbologie suivant MSC.192(79) et SN.1/Circ.243/Rev.2 :
+ *  - échelles 0,25 à 24 NM, anneaux fixes, ligne de foi, graduation compas ;
+ *  - mouvement relatif ou vrai (recentrage automatique à 50 % du rayon), décentrage manuel jusqu'à 75 % ;
+ *  - 2 EBL / 2 VRM, 4 lignes parallèles indexées, lecture permanente du curseur ;
+ *  - cibles suivies : segments de cercle en acquisition (rouges et clignotants en acquisition automatique non
+ *    acquittée), cercle + vecteur en poursuite, cercle rouge épais clignotant jusqu'à l'acquittement pour une
+ *    cible dangereuse, cercle barré pour une cible perdue, carré par ses coins pour la cible sélectionnée,
+ *    points équidistants en temps pour les positions passées ;
+ *  - manœuvre d'essai signalée par un grand « T » et un décompte ;
+ *  - palettes jour / crépuscule / nuit.
  */
 import { S } from '../core/state';
 import { RINGS } from '../core/data';
-import { D2R, clamp, vec } from '../core/util';
+import { D2R, adiff, brgOf, clamp, n360, vec } from '../core/util';
 import { ownWater } from '../sim/physics';
-import { SWP, trueV } from '../sim/radar';
+import { SWP, seaLevel, trialRemaining, trueV } from '../sim/radar';
+import { isUnackedDanger, isUnackedLost } from '../sim/alerts';
 
 let cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
 let W = 0, DPR = 1;
+/** Position du curseur sur le scope (pixels CSS), null hors du scope. */
+export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
+
+interface Pal { frame: string; ppi: string; echo: string; ring: string; scale: string; lbl: string; text: string; dim: string; sym: string; head: string; danger: string; lost: string; ebl: string; eblTxt: string; trial: string; own: string; zone: string }
+export const PALETTES: Record<'DAY' | 'DUSK' | 'NIGHT', Pal> = {
+  DAY: { frame: '#d5dde4', ppi: '#0b2c4d', echo: '#ffd84a', ring: '#4f86ab', scale: '#25384a', lbl: '#a9c9e0', text: '#0d1b26', dim: '#4d6475', sym: '#33e6ff', head: '#ffffff', danger: '#ff2b2b', lost: '#ffb020', ebl: '#86ffbe', eblTxt: '#0a6b3a', trial: '#ff9f1c', own: '#ffffff', zone: '#c38bff' },
+  DUSK: { frame: '#020509', ppi: '#04182a', echo: '#ffd23f', ring: '#1f5d74', scale: '#8fb5cc', lbl: '#8fb5cc', text: '#bfe3f5', dim: '#7f9fb3', sym: '#5ff3ff', head: '#e8f4ff', danger: '#ff3b3b', lost: '#ffb020', ebl: '#7dffb0', eblTxt: '#7dffb0', trial: '#ff9f1c', own: '#e8f4ff', zone: '#b58cff' },
+  NIGHT: { frame: '#000000', ppi: '#020406', echo: '#9a7414', ring: '#152a35', scale: '#4b5e6b', lbl: '#4b5e6b', text: '#6d7d88', dim: '#4a5862', sym: '#2c8796', head: '#7b8a95', danger: '#a51616', lost: '#8a5a10', ebl: '#3c7d58', eblTxt: '#3c7d58', trial: '#8a5a10', own: '#7b8a95', zone: '#5c4a80' },
+};
 
 export function initRender(canvas: HTMLCanvasElement): void {
   cv = canvas;
@@ -32,14 +51,47 @@ function dispRot(): number {
   return R.orient === 'HU' ? S.own.hdg : R.orient === 'CU' ? R.cuRef : 0;
 }
 
-/** Géométrie d'affichage : conversion position relative (NM) <-> pixels écran. */
+/** Route fond du porteur (repli sur le cap à faible vitesse). */
+function ownCourse(): number {
+  const o = S.own;
+  return Math.hypot(o.vx, o.vy) > 0.5 ? brgOf(o.vx, o.vy) : o.hdg;
+}
+
+/** Recentrage du mouvement vrai : le porteur repart à 50 % du rayon sur l'arrière du centre. */
+export function resetTM(): void {
+  const o = S.own, v = vec(ownCourse(), S.radar.range * 0.5);
+  S.radar.tmC = { x: o.x + v.x, y: o.y + v.y };
+}
+
+/** Centre géographique de l'affichage. */
+function displayCentre(): { x: number; y: number } {
+  const R = S.radar, o = S.own;
+  if (R.motion === 'TM') return R.tmC;
+  if (R.offMode === 'FWD') { const v = vec(R.orient === 'NU' ? ownCourse() : o.hdg, R.range * 0.5); return { x: o.x + v.x, y: o.y + v.y }; }
+  if (R.offMode === 'CUR') {
+    const d = Math.hypot(R.off.x, R.off.y), m = R.range * 0.75, f = d > m ? m / d : 1;
+    return { x: o.x + R.off.x * f, y: o.y + R.off.y * f };
+  }
+  return { x: o.x, y: o.y };
+}
+
+/** Géométrie d'affichage : conversions géographique / relatif au porteur <-> pixels. */
 export function geo() {
-  const w = W, cx = w / 2, cy = w / 2, Rr = w / 2 - 15, k = Rr / S.radar.range, rot = dispRot();
-  const cr = Math.cos(rot * D2R), sr = Math.sin(rot * D2R);
+  const R = S.radar, o = S.own;
+  const w = W, cx = w / 2, cy = w / 2, Rr = w / 2 - 16, k = Rr / R.range, rot = dispRot();
+  const C = displayCentre(), cr = Math.cos(rot * D2R), sr = Math.sin(rot * D2R);
+  const Wp = (wx: number, wy: number): [number, number] => {
+    const dx = wx - C.x, dy = wy - C.y;
+    return [cx + (dx * cr - dy * sr) * k, cy - (dx * sr + dy * cr) * k];
+  };
   return {
     w, cx, cy, Rr, k, rot,
-    P: (dx: number, dy: number): [number, number] => [cx + (dx * cr - dy * sr) * k, cy - (dx * sr + dy * cr) * k],
-    inv: (px: number, py: number) => { const sx = (px - cx) / k, sy = (cy - py) / k; return { x: sx * cr + sy * sr, y: -sx * sr + sy * cr }; },
+    /** position géographique (NM) → écran */
+    Wp,
+    /** position relative au porteur (NM) → écran */
+    P: (dx: number, dy: number): [number, number] => Wp(o.x + dx, o.y + dy),
+    /** écran → position géographique (NM) */
+    inv: (px: number, py: number) => { const sx = (px - cx) / k, sy = (cy - py) / k; return { x: C.x + sx * cr + sy * sr, y: C.y - sx * sr + sy * cr }; },
   };
 }
 
@@ -47,21 +99,37 @@ function line(x1: number, y1: number, x2: number, y2: number): void {
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
 }
 
+/** Lecture curseur : relèvement vrai et distance depuis le porteur. */
+export function cursorReadout(): { b: number; r: number } | null {
+  if (cursor.x === null || cursor.y === null) return null;
+  const G = geo(), p = G.inv(cursor.x, cursor.y), o = S.own;
+  const dx = p.x - o.x, dy = p.y - o.y;
+  return { b: brgOf(dx, dy), r: Math.hypot(dx, dy) };
+}
+
+export function eblText(b: number): string {
+  return S.radar.eblRef === 'T' ? `${b.toFixed(1)}°T` : `${n360(adiff(b, S.own.hdg)).toFixed(1)}°R`;
+}
+
 export function draw(): void {
   if (!W) return;
-  const G = geo(), { w, cx, cy, Rr, k, rot, P } = G, R = S.radar, o = S.own;
-  const blink = Math.floor(performance.now() / 400) % 2;
+  const R = S.radar, o = S.own, pal = PALETTES[R.palette];
+  if (R.motion === 'TM' && Math.hypot(o.x - R.tmC.x, o.y - R.tmC.y) > R.range * 0.52) resetTM();
+  const G = geo(), { w, cx, cy, Rr, k, rot, P, Wp } = G;
+  const now = performance.now(), blink = Math.floor(now / 450) % 2 === 0;
+  const fs = clamp(w / 68, 10, 14), sz = clamp(w / 120, 6, 10);
+  const [ox, oy] = P(0, 0);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#020509'; ctx.fillRect(0, 0, w, w);
+  ctx.fillStyle = pal.frame; ctx.fillRect(0, 0, w, w);
   ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, Rr, 0, 7); ctx.fillStyle = '#04182a'; ctx.fill(); ctx.clip();
+  ctx.beginPath(); ctx.arc(cx, cy, Rr, 0, 7); ctx.fillStyle = pal.ppi; ctx.fill(); ctx.clip();
 
-  // clutter de mer
-  ctx.fillStyle = '#ffd23f';
+  // clutter (mer, pluie, bruit) : positions relatives au porteur
+  ctx.fillStyle = pal.echo;
   for (const p of S.clutter) {
     const a = 1 - (0.6 * (S.t - p.t)) / SWP;
-    if (a <= 0 || p.r > R.range * 1.1) continue;
+    if (a <= 0 || p.r > R.range * 1.6) continue;
     ctx.globalAlpha = a * Math.min(1, p.s);
     const v = vec(p.b, p.r), q = P(v.x, v.y);
     ctx.fillRect(q[0] - 1, q[1] - 1, 2, 2);
@@ -73,93 +141,132 @@ export function draw(): void {
       const ag = S.t - h.t;
       if (ag > R.trailMin * 60) continue;
       ctx.globalAlpha = 0.45 * (1 - ag / (R.trailMin * 60)) + 0.08;
+      ctx.fillStyle = pal.echo;
       for (const t of S.targets) {
         if (!t.echo || S.t - t.echo.t > SWP * 1.1) continue;
         const q = h.p[t.id];
         if (!q) continue;
-        const dx = R.trail === 'REL' ? q[0] - h.ox : q[0] - o.x, dy = R.trail === 'REL' ? q[1] - h.oy : q[1] - o.y;
-        const s = P(dx, dy);
+        const s = R.trail === 'REL' ? P(q[0] - h.ox, q[1] - h.oy) : Wp(q[0], q[1]);
         ctx.fillRect(s[0] - 1, s[1] - 1, 2, 2);
       }
-      if (R.trail === 'TRUE') {
-        const s = P(h.ox - o.x, h.oy - o.y);
-        ctx.fillStyle = '#9fd8ff'; ctx.fillRect(s[0] - 1, s[1] - 1, 2, 2); ctx.fillStyle = '#ffd23f';
-      }
+      if (R.trail === 'TRUE') { const s = Wp(h.ox, h.oy); ctx.fillStyle = pal.own; ctx.fillRect(s[0] - 1, s[1] - 1, 2, 2); }
     }
   }
 
   // échos
-  ctx.fillStyle = '#ffd23f';
+  ctx.fillStyle = pal.echo;
+  const beam = (R.band === 'X' ? 1.0 : 1.8) * D2R;
   for (const t of S.targets) {
     const e = t.echo;
-    if (!e || e.r > R.range * 1.1) continue;
+    if (!e) continue;
     const ag = S.t - e.t;
     if (ag > SWP * 1.05) continue;
+    const q = Wp(e.x, e.y);
+    if (Math.hypot(q[0] - cx, q[1] - cy) > Rr + 10) continue;
     ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.25, 1);
-    const q = P(e.dx, e.dy), lp = (t.L / 1852) * k;
-    const wd = Math.max(3, e.r * k * 0.022 + lp * 0.6), dp = Math.max(2.5, 0.025 * k + lp * 0.4);
+    const lp = (t.L / 1852) * k;
+    const wd = Math.max(3, e.r * k * beam + lp * 0.6), dp = Math.max(2.5, 0.025 * k + lp * 0.4);
     ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate((e.b - rot) * D2R); ctx.fillRect(-wd / 2, -dp / 2, wd, dp); ctx.restore();
   }
   ctx.globalAlpha = 1;
 
-  // cercles de distance
-  ctx.strokeStyle = '#1f5d74'; ctx.lineWidth = 1;
+  // anneaux de distance (centrés sur le porteur)
+  ctx.strokeStyle = pal.ring; ctx.lineWidth = 1;
   const rs = RINGS[R.range];
-  for (let rr = rs; rr <= R.range + 1e-6; rr += rs) { ctx.beginPath(); ctx.arc(cx, cy, rr * k, 0, 7); ctx.stroke(); }
+  for (let rr = rs; rr <= R.range + 1e-6; rr += rs) { ctx.beginPath(); ctx.arc(ox, oy, rr * k, 0, 7); ctx.stroke(); }
+
+  // zone d'acquisition
+  if (R.zone > 0) {
+    ctx.strokeStyle = pal.zone; ctx.setLineDash([2, 6]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(ox, oy, R.zone * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // lignes parallèles indexées
+  ctx.strokeStyle = pal.sym; ctx.lineWidth = 1; ctx.setLineDash([1, 4]);
+  for (const pi of R.pi) {
+    if (!pi) continue;
+    const u = vec(pi.b, 1), n = vec(pi.b + 90, pi.d), L = R.range * 3;
+    const a = P(n.x - u.x * L, n.y - u.y * L), b = P(n.x + u.x * L, n.y + u.y * L);
+    line(a[0], a[1], b[0], b[1]);
+  }
+  ctx.setLineDash([]);
 
   // ligne de foi
-  ctx.strokeStyle = '#e8f4ff'; ctx.lineWidth = 1.2;
-  const hv = vec(o.hdg, R.range * 1.2), hq = P(hv.x, hv.y);
-  line(cx, cy, hq[0], hq[1]);
+  ctx.strokeStyle = pal.head; ctx.lineWidth = 1.3;
+  const hv = vec(o.hdg, R.range * 3), hq = P(hv.x, hv.y);
+  line(ox, oy, hq[0], hq[1]);
 
-  // navire porteur (contour à petite échelle)
+  // navire porteur : contour à petite échelle, double cercle sinon (SN.1/Circ.243)
+  ctx.strokeStyle = pal.own; ctx.lineWidth = 1.2;
   if (R.range <= 1.5) {
-    const L = o.L / 1852, B = L * 0.15;
+    const L = o.L / 1852, B = L * 0.16;
     const pts = [[0, L / 2], [B / 2, L / 4], [B / 2, -L / 2], [-B / 2, -L / 2], [-B / 2, L / 4]].map(([a, b]) => {
       const f = vec(o.hdg, b), s = vec(o.hdg + 90, a);
       return P(f.x + s.x, f.y + s.y);
     });
     ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.stroke();
-  } else { ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 7); ctx.stroke(); }
+  } else {
+    ctx.beginPath(); ctx.arc(ox, oy, 3, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ox, oy, 6.5, 0, 7); ctx.stroke();
+  }
 
+  // vecteur du porteur (vecteurs vrais)
   const vm = R.vecMin / 60;
   if (R.vec === 'TRUE') {
     const v = R.stab === 'GND' ? { x: o.vx, y: o.vy } : ownWater(), q = P(v.x * vm, v.y * vm);
-    ctx.strokeStyle = '#e8f4ff'; ctx.lineWidth = 1.6; line(cx, cy, q[0], q[1]);
+    ctx.strokeStyle = pal.own; ctx.lineWidth = 1.8; line(ox, oy, q[0], q[1]);
   }
   if (R.trial && R.vec === 'TRUE') {
-    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ff9f1c'; ctx.lineWidth = 1.4;
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = pal.trial; ctx.lineWidth = 1.5;
     const w0 = ownWater(), tw = vec(R.trialHdg, R.trialSpd);
     const v = R.stab === 'GND' ? { x: tw.x + o.vx - w0.x, y: tw.y + o.vy - w0.y } : tw, q = P(v.x * vm, v.y * vm);
-    line(cx, cy, q[0], q[1]);
+    line(ox, oy, q[0], q[1]);
     ctx.setLineDash([]);
   }
 
-  // symboles ARPA
-  ctx.font = '600 10px ui-monospace,Menlo,monospace';
+  // cibles suivies
+  ctx.font = `600 ${fs * 0.85}px ui-monospace,Menlo,monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   for (const tr of S.tracks) {
     if (!tr.est) continue;
-    const dx = tr.est.x - o.x, dy = tr.est.y - o.y;
-    if (Math.hypot(dx, dy) > R.range * 1.15) continue;
-    const q = P(dx, dy), col = tr.danger ? (blink ? '#ff3b3b' : '#ff9a9a') : tr.state === 'LOST' ? '#ffb020' : '#5ff3ff';
-    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.5;
+    const q = Wp(tr.est.x, tr.est.y);
+    if (Math.hypot(q[0] - cx, q[1] - cy) > Rr + 20) continue;
+    const dangerFlash = tr.danger && isUnackedDanger(tr.n), lostFlash = tr.state === 'LOST' && isUnackedLost(tr.n);
+    const col = tr.state === 'LOST' ? pal.lost : tr.danger ? pal.danger : pal.sym;
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+    // positions passées
+    if (R.pastMin > 0 && tr.state !== 'ACQ') {
+      for (let i = 1; i <= 4; i++) {
+        const tt = S.t - i * R.pastMin * 60;
+        let best = null as null | { x: number; y: number }, bd = 20;
+        for (const p of tr.past) { const d = Math.abs(p.t - tt); if (d < bd) { bd = d; best = p; } }
+        if (best) { const s = Wp(best.x, best.y); ctx.beginPath(); ctx.arc(s[0], s[1], 1.6, 0, 7); ctx.fill(); }
+      }
+    }
+    // vecteur
     if (tr.state !== 'ACQ' && tr.est.vok) {
       let vx: number, vy: number;
       if (R.vec === 'REL') { vx = tr.est.vx - o.vx; vy = tr.est.vy - o.vy; } else { const t = trueV(tr); vx = t.x; vy = t.y; }
-      const e = P(dx + vx * vm, dy + vy * vm);
+      const e = Wp(tr.est.x + vx * vm, tr.est.y + vy * vm);
+      ctx.lineWidth = tr.danger ? 2.2 : 1.5;
       line(q[0], q[1], e[0], e[1]);
     }
-    if (tr.state === 'ACQ') { ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(q[0], q[1], 8, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
-    else if (tr.state === 'LOST') {
-      ctx.beginPath(); ctx.moveTo(q[0], q[1] - 8); ctx.lineTo(q[0] + 8, q[1]); ctx.lineTo(q[0], q[1] + 8); ctx.lineTo(q[0] - 8, q[1]); ctx.closePath(); ctx.stroke();
-      line(q[0] - 5, q[1] - 5, q[0] + 5, q[1] + 5); line(q[0] - 5, q[1] + 5, q[0] + 5, q[1] - 5);
-    } else if (tr.danger) {
-      ctx.beginPath(); ctx.moveTo(q[0], q[1] - 10); ctx.lineTo(q[0] + 9, q[1] + 6); ctx.lineTo(q[0] - 9, q[1] + 6); ctx.closePath(); ctx.stroke();
-    } else { ctx.beginPath(); ctx.arc(q[0], q[1], 7, 0, 7); ctx.stroke(); }
-    ctx.fillText(String(tr.n), q[0] + 10, q[1] - 8);
+    const show = (!dangerFlash && !lostFlash && !(tr.auto && tr.state === 'ACQ')) || blink;
+    if (show) {
+      if (tr.state === 'ACQ') {
+        const autoUnack = tr.auto;
+        ctx.strokeStyle = autoUnack ? pal.danger : col; ctx.lineWidth = autoUnack ? 2.5 : 1.5;
+        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(q[0], q[1], sz + 1, (i * Math.PI) / 2 + 0.25, (i * Math.PI) / 2 + Math.PI / 2 - 0.25); ctx.stroke(); }
+      } else {
+        ctx.lineWidth = tr.danger ? 3 : 1.5;
+        ctx.beginPath(); ctx.arc(q[0], q[1], sz, 0, 7); ctx.stroke();
+        if (tr.state === 'LOST') { ctx.lineWidth = 2.5; line(q[0] - sz * 1.3, q[1] - sz * 1.3, q[0] + sz * 1.3, q[1] + sz * 1.3); line(q[0] - sz * 1.3, q[1] + sz * 1.3, q[0] + sz * 1.3, q[1] - sz * 1.3); }
+      }
+    }
+    ctx.fillStyle = col;
+    ctx.fillText(String(tr.n), q[0] + sz + 3, q[1] - sz - 1);
     if (S.sel === tr.n) {
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
-      const s = 12, c = 4;
+      ctx.strokeStyle = pal.head; ctx.lineWidth = 1.2;
+      const s = sz + 6, c = 5;
       for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
         line(q[0] + a * s, q[1] + b * s, q[0] + a * (s - c), q[1] + b * s);
         line(q[0] + a * s, q[1] + b * s, q[0] + a * s, q[1] + b * (s - c));
@@ -167,54 +274,92 @@ export function draw(): void {
     }
     if (R.trial && tr.trial && tr.state !== 'ACQ') {
       const tt = tr.trial, a = P(tt.px, tt.py), b = P(tt.px + tt.rvx * vm, tt.py + tt.rvy * vm);
-      ctx.setLineDash([5, 4]); ctx.strokeStyle = '#ff9f1c'; ctx.lineWidth = 1.4; line(a[0], a[1], b[0], b[1]); ctx.setLineDash([]);
+      ctx.setLineDash([6, 4]); ctx.strokeStyle = pal.trial; ctx.lineWidth = 1.5; line(a[0], a[1], b[0], b[1]); ctx.setLineDash([]);
     }
   }
 
   // EBL / VRM
-  if (R.ebl) {
-    ctx.setLineDash([6, 5]); ctx.strokeStyle = '#7dffb0'; ctx.lineWidth = 1;
-    const v = vec(R.ebl.b, R.range * 1.2), q = P(v.x, v.y);
-    line(cx, cy, q[0], q[1]);
-    ctx.beginPath(); ctx.arc(cx, cy, R.ebl.r * k, 0, 7); ctx.stroke();
-    ctx.setLineDash([]);
+  const dashes = [[8, 5], [3, 4]];
+  for (let i = 0; i < 2; i++) {
+    ctx.strokeStyle = pal.ebl; ctx.lineWidth = 1.2; ctx.setLineDash(dashes[i]);
+    const b = R.ebl[i], r = R.vrm[i];
+    if (b !== null) { const v = vec(b, R.range * 3), q = P(v.x, v.y); line(ox, oy, q[0], q[1]); }
+    if (r !== null) { ctx.beginPath(); ctx.arc(ox, oy, r * k, 0, 7); ctx.stroke(); }
   }
+  ctx.setLineDash([]);
 
   // balayage (masqué en temps accéléré)
   if (S.ts <= 2 && !S.paused) {
-    const a = (S.sweep - rot) * D2R;
+    const a = (S.sweep - rot) * D2R, L = R.range * 3 * k;
     for (let i = 0; i < 10; i++) {
-      ctx.strokeStyle = `rgba(80,200,255,${0.28 - i * 0.026})`; ctx.lineWidth = 2;
+      ctx.strokeStyle = pal.sym; ctx.globalAlpha = 0.22 - i * 0.02; ctx.lineWidth = 2;
       const b = a - i * 0.035;
-      line(cx, cy, cx + Math.sin(b) * Rr, cy - Math.cos(b) * Rr);
+      line(ox, oy, ox + Math.sin(b) * L, oy - Math.cos(b) * L);
     }
+    ctx.globalAlpha = 1;
+  }
+
+  // curseur
+  if (cursor.x !== null && cursor.y !== null && Math.hypot(cursor.x - cx, cursor.y - cy) < Rr) {
+    ctx.strokeStyle = pal.head; ctx.lineWidth = 1;
+    line(cursor.x - 9, cursor.y, cursor.x - 3, cursor.y); line(cursor.x + 3, cursor.y, cursor.x + 9, cursor.y);
+    line(cursor.x, cursor.y - 9, cursor.x, cursor.y - 3); line(cursor.x, cursor.y + 3, cursor.x, cursor.y + 9);
+  }
+
+  // manœuvre d'essai : grand « T » et décompte
+  if (R.trial) {
+    ctx.fillStyle = pal.trial; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${fs * 3}px system-ui,sans-serif`;
+    const tx = cx - Rr * 0.68, ty = cy - Rr * 0.6;
+    ctx.fillText('T', tx, ty);
+    ctx.font = `600 ${fs * 0.9}px ui-monospace,Menlo,monospace`;
+    const rem = trialRemaining();
+    ctx.fillText(rem > 0 ? `dans ${Math.floor(rem / 60)}:${String(Math.floor(rem % 60)).padStart(2, '0')}` : 'immédiat', tx, ty + fs * 2);
   }
   ctx.restore();
 
-  // graduation compas (stabilisée gyro)
-  ctx.strokeStyle = '#5d8aa3'; ctx.fillStyle = '#8fb5cc'; ctx.lineWidth = 1;
-  ctx.font = '9px ui-monospace,Menlo,monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // graduation compas
+  ctx.strokeStyle = pal.scale; ctx.fillStyle = pal.scale; ctx.lineWidth = 1;
+  ctx.font = `${fs * 0.78}px ui-monospace,Menlo,monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (let b = 0; b < 360; b += 5) {
-    const a = (b - rot) * D2R, l = b % 10 ? 3 : 6, s = Math.sin(a), c = Math.cos(a);
+    const a = (b - rot) * D2R, l = b % 10 ? 3 : 7, s = Math.sin(a), c = Math.cos(a);
     line(cx + s * Rr, cy - c * Rr, cx + s * (Rr + l), cy - c * (Rr + l));
-    if (b % 30 === 0) ctx.fillText(String(b).padStart(3, '0'), cx + s * (Rr - 10), cy - c * (Rr - 10));
+    ctx.fillStyle = pal.lbl;
+    if (b % 30 === 0) ctx.fillText(String(b).padStart(3, '0'), cx + s * (Rr - fs), cy - c * (Rr - fs));
   }
 
-  // cartouches
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = '600 10.5px ui-monospace,Menlo,monospace'; ctx.fillStyle = '#bfe3f5';
-  ctx.fillText(`${R.orient} RM`, 5, 4); ctx.fillText(`${R.range} NM`, 5, 17);
-  ctx.fillStyle = '#7f9fb3'; ctx.fillText(`(${RINGS[R.range]})`, 5, 30);
-  ctx.textAlign = 'right'; ctx.fillStyle = '#bfe3f5';
-  ctx.fillText(`VEC ${R.vec === 'REL' ? 'REL' : 'VRAI'} ${R.vecMin}'`, w - 5, 4);
-  ctx.fillText(R.stab === 'GND' ? 'STAB SOL' : 'STAB EAU', w - 5, 17);
-  if (R.trial) { ctx.fillStyle = '#ff9f1c'; ctx.fillText('TRIAL', w - 5, 30); }
-  ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
-  if (R.ebl) { ctx.fillStyle = '#7dffb0'; ctx.fillText(`EBL ${R.ebl.b.toFixed(1)}°`, 5, w - 17); ctx.fillText(`VRM ${R.ebl.r.toFixed(2)}`, 5, w - 4); }
-  ctx.textAlign = 'right'; ctx.fillStyle = S.env.vis === 'poor' ? '#ffb020' : '#7f9fb3';
-  ctx.fillText(S.env.vis === 'poor' ? 'BRUME' : S.env.night ? 'NUIT' : 'JOUR', w - 5, w - 4);
+  // cartouches permanents (MSC.192(79) 5.10.2, 5.20.3, 5.22, 5.27.3, 5.3.2.5)
+  const lh = fs * 1.25, sea = Math.round(seaLevel() * 100);
+  ctx.font = `600 ${fs}px ui-monospace,Menlo,monospace`; ctx.textBaseline = 'top';
+  const TL = [
+    `${R.orient === 'NU' ? 'NORTH UP' : R.orient === 'CU' ? 'COURSE UP' : 'HEAD UP'} ${R.motion}${R.offMode !== 'OFF' && R.motion === 'RM' ? ' DÉCENTRÉ' : ''}`,
+    `${R.range} NM  anneaux ${RINGS[R.range]} NM`,
+    `BANDE ${R.band}  GAIN ${R.gain}`,
+    `MER ${R.seaAuto ? 'AUTO ' : ''}${sea}  PLUIE ${R.rain}`,
+  ];
+  const TR = [
+    `VECT ${R.vec === 'REL' ? 'REL' : 'VRAIS'} ${R.vecMin} min`,
+    `STAB ${R.stab === 'GND' ? 'SOL (GNSS)' : 'EAU (LOCH)'}`,
+    `SILLAGES ${R.trail === 'OFF' ? 'OFF' : (R.trail === 'REL' ? 'REL ' : 'VRAIS ') + R.trailMin + ' min'}`,
+    `CPA ${R.cpaLim} NM  TCPA ${R.tcpaLim} min`,
+  ];
+  ctx.textAlign = 'left'; TL.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, 6, 5 + i * lh); });
+  ctx.textAlign = 'right'; TR.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, w - 6, 5 + i * lh); });
+  ctx.textBaseline = 'bottom';
+  const BL: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const b = R.ebl[i], r = R.vrm[i];
+    if (b !== null || r !== null) BL.push(`EBL${i + 1} ${b !== null ? eblText(b) : '---'}  VRM${i + 1} ${r !== null ? r.toFixed(2) + ' NM' : '---'}`);
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = pal.eblTxt; BL.forEach((s, i) => ctx.fillText(s, 6, w - 5 - (BL.length - 1 - i) * lh));
+  const cr = cursorReadout(), BR: string[] = [];
+  if (cr) BR.push(`CURSEUR ${cr.b.toFixed(1)}°T ${cr.r.toFixed(2)} NM`);
+  BR.push(S.env.vis === 'poor' ? 'BRUME' : S.env.night ? 'NUIT' : 'JOUR');
+  ctx.textAlign = 'right'; BR.forEach((s, i) => { ctx.fillStyle = i === BR.length - 1 && S.env.vis === 'poor' ? pal.lost : pal.text; ctx.fillText(s, w - 6, w - 5 - (BR.length - 1 - i) * lh); });
+
   if (!S.started && !S.over) {
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '600 13px system-ui,sans-serif';
-    ctx.fillStyle = 'rgba(2,5,9,.75)'; ctx.fillRect(cx - 120, cy + Rr * 0.45 - 14, 240, 28);
-    ctx.fillStyle = '#fff'; ctx.fillText('Appuyez sur ▶ pour démarrer', cx, cy + Rr * 0.45);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 ${fs * 1.2}px system-ui,sans-serif`;
+    ctx.fillStyle = 'rgba(2,5,9,.78)'; ctx.fillRect(cx - 150, cy + Rr * 0.45 - 16, 300, 32);
+    ctx.fillStyle = '#fff'; ctx.fillText('Appuyez sur ▶ (ou Espace) pour démarrer', cx, cy + Rr * 0.45);
   }
 }

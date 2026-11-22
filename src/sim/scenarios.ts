@@ -102,8 +102,12 @@ export function newScenario(): void {
   Object.assign(S, {
     t: 0, targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1,
     aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], over: false, collided: null, report: null, started: false, paused: true,
+    alerts: [], rainCells: [], silencedUntil: 0,
   });
-  Object.assign(S.radar, { cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), ebl: null, trial: false });
+  Object.assign(S.radar, {
+    cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), trial: false, trialT0: 0, tmC: { x: 0, y: 0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
+    ebl: [null, null], vrm: [null, null], pi: [null, null, null, null],
+  });
   SCEN[S.scen].build();
   logE(`Exercice : ${SCEN[S.scen].n} — ${sh.n}, cap ${p3(H)}°, ${TELE[TELE_SEA].n}`);
 }

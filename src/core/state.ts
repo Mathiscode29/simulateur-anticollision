@@ -25,8 +25,8 @@ export interface OwnShip {
   u: number; v: number; r: number; n: number; revUntil: number;
 }
 
-/** Écho radar tel que peint au dernier passage du faisceau (position relative au porteur). */
-export interface Echo { dx: number; dy: number; b: number; r: number; t: number }
+/** Écho radar tel que peint au dernier passage du faisceau : position géographique (NM), relèvement et distance depuis le porteur. */
+export interface Echo { x: number; y: number; b: number; r: number; t: number }
 
 export interface TargetAI { state: 'transit' | 'avoid'; role: Role | null; cool: number; want?: number; actT?: number; info?: string; done?: string }
 
@@ -44,6 +44,10 @@ export interface Track {
   state: 'ACQ' | 'TRK' | 'LOST'; est: { x: number; y: number; vx: number; vy: number; vok: boolean } | null;
   lostT?: number; range: number; brg: number; cpa: number; tcpa: number; brate: number;
   bcr: number | null; bct: number | null; danger: boolean; crs: number; spd: number; trial?: TrialResult;
+  /** Acquisition automatique (zone) : symbole d'acquisition rouge jusqu'à l'acquittement. */
+  auto: boolean;
+  /** Positions passées estimées (échantillonnées toutes les 15 s). */
+  past: { t: number; x: number; y: number }[];
 }
 
 export interface ActionRec { t: number; tcpa: number; r: number; tb: number; tgtActed: boolean; dir?: number }
@@ -60,12 +64,38 @@ export interface ReportItem { label: string; name: string; L: number; role: stri
 export interface Report { score: number; grade: string; scen: string; duration: number; global: Msg[]; items: ReportItem[]; collided: boolean }
 
 export interface RadarSettings {
-  range: number; orient: 'HU' | 'NU' | 'CU'; cuRef: number; vec: 'REL' | 'TRUE'; vecMin: number; stab: 'GND' | 'SEA';
-  trail: 'OFF' | 'REL' | 'TRUE'; trailMin: number; ac: number; ebl: { b: number; r: number } | null;
-  cpaLim: number; tcpaLim: number; autoAcq: boolean; trial: boolean; trialHdg: number; trialSpd: number; trialDelay: number;
+  range: number; orient: 'HU' | 'NU' | 'CU'; cuRef: number;
+  /** Mouvement relatif ou vrai (MSC.192(79) 5.20). */
+  motion: 'RM' | 'TM';
+  /** Centre d'affichage en mouvement vrai (position géographique, NM). */
+  tmC: { x: number; y: number };
+  /** Décentrage en mouvement relatif : vecteur porteur → centre (NM). */
+  offMode: 'OFF' | 'FWD' | 'CUR'; off: { x: number; y: number };
+  vec: 'REL' | 'TRUE'; vecMin: number; stab: 'GND' | 'SEA';
+  trail: 'OFF' | 'REL' | 'TRUE'; trailMin: number;
+  /** Positions passées des cibles suivies : intervalle (min), 0 = masquées. */
+  pastMin: number;
+  /** Réglages vidéo (0-100), anti-clutter mer automatique, bande. */
+  gain: number; sea: number; seaAuto: boolean; rain: number; band: 'X' | 'S';
+  /** Deux EBL et deux VRM (MSC.192(79) 5.12, 5.15), relèvements vrais. */
+  ebl: [number | null, number | null]; vrm: [number | null, number | null]; eblRef: 'T' | 'R';
+  /** Quatre lignes parallèles indexées : relèvement de la ligne (°) et distance latérale signée (NM). */
+  pi: ({ b: number; d: number } | null)[];
+  /** Outil affecté au clic sur le scope. */
+  tool: 'EV1' | 'EV2' | 'PI' | 'NONE';
+  cpaLim: number; tcpaLim: number;
+  /** Zone d'acquisition automatique : rayon (NM), 0 = désactivée. */
+  zone: number;
+  trial: boolean; trialHdg: number; trialSpd: number; trialDelay: number; trialT0: number;
+  palette: 'DAY' | 'DUSK' | 'NIGHT';
 }
 
-export interface Env { windFrom: number; windKn: number; curSet: number; curKn: number; vis: Visibility; night: boolean; comp: Compliance }
+export type AlertCat = 'alarm' | 'warning' | 'caution';
+/** Alerte de passerelle (logique inspirée de la gestion des alertes de passerelle, MSC.302(87)). */
+export interface Alert { id: string; cat: AlertCat; text: string; t0: number; active: boolean; acked: boolean; event: boolean }
+
+export interface Env { windFrom: number; windKn: number; curSet: number; curKn: number; vis: Visibility; night: boolean; comp: Compliance; rain: boolean }
+export interface RainCell { x: number; y: number; r: number }
 
 export interface ClutterPt { b: number; r: number; s: number; t: number }
 export interface HistPt { t: number; ox: number; oy: number; p: Record<number, [number, number]> }
@@ -77,6 +107,7 @@ export interface State {
   enc: Record<number, Encounter>; log: LogEntry[]; sweep: number; sel: number | null; trackSeq: number; nextTid: number;
   aiAcc: number; encAcc: number; histAcc: number; spdPoor: [number, number]; shipKey: string; scen: string;
   collided: number | null; report: Report | null; env: Env; radar: RadarSettings;
+  alerts: Alert[]; rainCells: RainCell[]; silencedUntil: number;
 }
 
 function defaultOwn(): OwnShip {
@@ -88,11 +119,15 @@ export const S: State = {
   t: 0, ts: 1, paused: true, started: false, over: false,
   own: defaultOwn(), targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1, nextTid: 1,
   aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], shipKey: DEFAULT_SHIP, scen: 'r15', collided: null, report: null,
-  env: { windFrom: 240, windKn: 18, curSet: 90, curKn: 1.2, vis: 'good', night: true, comp: 'real' },
+  env: { windFrom: 240, windKn: 18, curSet: 90, curKn: 1.2, vis: 'good', night: true, comp: 'real', rain: false },
   radar: {
-    range: 6, orient: 'HU', cuRef: 0, vec: 'REL', vecMin: 6, stab: 'GND', trail: 'REL', trailMin: 6, ac: 0.35, ebl: null,
-    cpaLim: 1, tcpaLim: 12, autoAcq: false, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0,
+    range: 6, orient: 'NU', cuRef: 0, motion: 'RM', tmC: { x: 0, y: 0 }, offMode: 'OFF', off: { x: 0, y: 0 },
+    vec: 'TRUE', vecMin: 6, stab: 'SEA', trail: 'REL', trailMin: 6, pastMin: 1,
+    gain: 60, sea: 35, seaAuto: true, rain: 0, band: 'X',
+    ebl: [null, null], vrm: [null, null], eblRef: 'T', pi: [null, null, null, null], tool: 'EV1',
+    cpaLim: 1, tcpaLim: 12, zone: 0, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0, trialT0: 0, palette: 'DUSK',
   },
+  alerts: [], rainCells: [], silencedUntil: 0,
 };
 
 /** Journal de passerelle (le plus récent en tête). */

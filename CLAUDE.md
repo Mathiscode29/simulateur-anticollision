@@ -16,12 +16,15 @@ Simulateur radar/ARPA web pour s'entraîner à l'anticollision (RIPAM / COLREG).
 src/core/   util.ts (maths, conventions), data.ts (navires, transmetteur, types de cibles), state.ts (types + état global S)
             ships/ (jeux de paramètres MMG sourcés, un fichier par navire)
 src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arrêt, critères OMI MSC.137(76)),
-            physics.ts (porteur MMG ou Nomoto, machine, vent/courant, cinématique des cibles), radar.ts (balayage, détection, ARPA, trial),
+            physics.ts (porteur MMG, machine, vent/courant, cinématique des cibles), radar.ts (balayage, gain/mer/pluie, bandes X/S,
+            grains, poursuite TT, zone d'acquisition, trial), alerts.ts (alertes et acquittement, sans DOM),
             rules.ts (roleOf + IA des cibles), assessment.ts (suivi des situations, évaluation, rapport),
             scenarios.ts, visual.ts (feux, marques, signaux de brume), loop.ts (pas de simulation)
-src/ui/     render.ts (scope canvas), controls.ts (DOM, onglets, table ARPA, bilan), style.css
+src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, palettes),
+            controls.ts (DOM, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
-            manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG)
+            manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar)
+docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243, à tenir à jour)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
 ```
 
@@ -38,7 +41,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 ## Références métier
 
 - RIPAM (règlement international pour prévenir les abordages en mer, COLREG 1972 amendé), règles 5 à 19, 35, annexe I.
-- Radar/ARPA : norme IEC 62388 et résolution OMI MSC.192(79) pour la présentation et la symbologie.
+- Radar/ARPA : résolution OMI MSC.192(79) et symboles SN.1/Circ.243/Rev.2 (grille de suivi : `docs/conformite-radar.md`, à mettre à jour à chaque évolution du radar). Norme d'essai IEC 62388 non consultée (payante).
 - Manœuvrabilité : méthode MMG standard (Yasukawa & Yoshimura, J. Mar. Sci. Technol. 20:37-52, 2015). **Un seul navire porteur** pour l'instant (KVLCC2) ; pas de sélecteur de navire tant qu'il n'y en a qu'un.
 - Prochain navire : porte-conteneurs KCS (230 m). Bloquant : obtenir un jeu complet de coefficients MMG publiés (piste : Yasukawa et al., J. Mar. Sci. Technol. 28:98-116, 2023, DOI 10.1007/s00773-022-00908-3, accès payant). Cibles de validation en essais libres (moyenne multi-bassins, Fr 0,26, barre 35°) : avance ≈ 2,9 L ; diamètre tactique ≈ 2,9 L sur tribord et 2,6 L sur bâbord ; vitesse en giration ≈ 0,46 U.
 - Critères OMI de manœuvrabilité : résolution MSC.137(76).

@@ -1,7 +1,8 @@
 /** Pas de simulation (0,25 s simulées). Indépendant du DOM : utilisable en test. */
 import { S } from '../core/state';
 import { stepOwn, stepT } from './physics';
-import { radarStep, estimate, SWP } from './radar';
+import { radarStep, estimate, rainStep, SWP } from './radar';
+import { updateAlerts } from './alerts';
 import { aiStep } from './rules';
 import { encStep, checkCol } from './assessment';
 
@@ -18,6 +19,7 @@ export function simStep(dt = DT): void {
   S.t += dt;
   stepOwn(dt);
   for (const t of S.targets) stepT(t, dt);
+  rainStep(dt);
   radarStep(dt);
   S.aiAcc += dt;
   if (S.aiAcc >= 2) { S.aiAcc = 0; for (const t of S.targets) aiStep(t); }
@@ -26,4 +28,5 @@ export function simStep(dt = DT): void {
   S.histAcc += dt;
   if (S.histAcc >= 10) { S.histAcc = 0; pushHist(); }
   for (const tr of S.tracks) estimate(tr);
+  updateAlerts();
 }
