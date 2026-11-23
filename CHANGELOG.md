@@ -7,6 +7,10 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.7 — 23 novembre 2026
+- Vue extérieure : montants des vitres de la passerelle 1,5 fois plus espacés (tous les 36° au lieu de 24°).
+- Fenêtres des châteaux des autres navires : retour à l'espacement d'origine (2,8 m), la V1.6 ayant mal interprété la demande.
+
 ## V1.6 — 23 novembre 2026
 - Vue extérieure : rangées de fenêtres des châteaux 1,5 fois plus espacées (un niveau tous les 4,2 m au lieu de 2,8 m).
 
