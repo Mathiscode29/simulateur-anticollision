@@ -28,7 +28,22 @@ export interface OwnShip {
 /** Écho radar tel que peint au dernier passage du faisceau : position géographique (NM), relèvement et distance depuis le porteur. */
 export interface Echo { x: number; y: number; b: number; r: number; t: number }
 
-export interface TargetAI { state: 'transit' | 'avoid'; role: Role | null; cool: number; want?: number; actT?: number; info?: string; done?: string }
+export interface TargetAI {
+  state: 'transit' | 'avoid'; role: Role | null; cool: number; want?: number; actT?: number; info?: string; done?: string;
+  /** Navire évité pendant l'état « avoid » : undefined = porteur, sinon identifiant de la cible. */
+  vs?: number;
+  /** Rôles vis-à-vis des autres cibles (figés au début de chaque rencontre). */
+  rel?: Record<number, { role: Role; want: number; actT: number }>;
+  /** Manœuvre d'urgence (dernière minute) en cours. */
+  last?: boolean;
+}
+
+/** Avarie d'une cible : machine, barre, abordage entre cibles ; programmée (at) ou en cours (active). */
+export interface Fault {
+  kind: 'engine' | 'steering' | 'collision';
+  active: boolean; at?: number; until?: number;
+  prev?: TargetType; jam?: number; lane?: 'NE' | 'SW';
+}
 
 /** Dernier message de position AIS reçu (classe A ou B). */
 export interface AisReport { t: number; x: number; y: number; sog: number; cog: number; hdg: number }
@@ -41,6 +56,9 @@ export interface Target {
   maxRot: number; tau: number; acc: number; dec: number; wind: number; rcs: number;
   beh: Behaviour; ai: TargetAI; echo: Echo | null; nextFish: number; vx: number; vy: number;
   ais: Ais | null;
+  /** Nom du navire (affiché par l'AIS, utilisé dans les messages). */
+  vname: string;
+  fault?: Fault;
   /** Navire qui suit une voie du DST : voie, sens (1 = sens réglementaire, −1 = contresens), décalage latéral (NM). */
   lane?: 'NE' | 'SW'; laneDir?: 1 | -1; laneOff?: number;
 }
@@ -65,6 +83,8 @@ export interface Encounter {
   tid: number; role: Role; t0: number; h0: number; v0: number; th0: number; tv0: number; tb0: number; weOvertake: boolean;
   minR: number; fc: (ActionRec & { dir: number }) | null; fs: ActionRec | null; maxDev: number; maxRed: number;
   crossedAhead: boolean; side: number | null; tgtActT: number | null; closed: boolean; tracked: boolean;
+  /** Statut de la cible au début de la situation, et changement de statut constaté (avarie). */
+  type0?: TargetType; chg?: string;
   res?: { pen: number; m: Msg[] };
 }
 
@@ -124,7 +144,9 @@ export type AlertCat = 'alarm' | 'warning' | 'caution';
 /** Alerte de passerelle (logique inspirée de la gestion des alertes de passerelle, MSC.302(87)). */
 export interface Alert { id: string; cat: AlertCat; text: string; t0: number; active: boolean; acked: boolean; event: boolean }
 
-export interface Env { windFrom: number; windKn: number; curSet: number; curKn: number; vis: Visibility; night: boolean; comp: Compliance; rain: boolean }
+/** Fréquence des avaries aléatoires des cibles. */
+export type Faults = 'off' | 'rare' | 'freq';
+export interface Env { windFrom: number; windKn: number; curSet: number; curKn: number; vis: Visibility; night: boolean; comp: Compliance; rain: boolean; faults: Faults }
 export interface RainCell { x: number; y: number; r: number }
 /** Route prévue : points tournants (NM), segment actif, demi-largeur du couloir (NM) et statistiques d'écart. */
 export interface Route { wps: { x: number; y: number }[]; leg: number; xteLim: number; show: boolean; maxXte: number; tOver: number }
@@ -168,7 +190,7 @@ export const S: State = {
   t: 0, ts: 1, paused: true, started: false, over: false,
   own: defaultOwn(), targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1, nextTid: 1,
   aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], shipKey: DEFAULT_SHIP, scen: 'r15', collided: null, report: null,
-  env: { windFrom: 240, windKn: 18, curSet: 90, curKn: 1.2, vis: 'good', night: true, comp: 'real', rain: false },
+  env: { windFrom: 240, windKn: 18, curSet: 90, curKn: 1.2, vis: 'good', night: true, comp: 'real', rain: false, faults: 'rare' },
   radar: {
     range: 6, orient: 'NU', cuRef: 0, motion: 'RM', tmC: { x: 0, y: 0 }, offMode: 'OFF', off: { x: 0, y: 0 },
     vec: 'TRUE', vecMin: 6, stab: 'SEA', trail: 'REL', trailMin: 6, pastMin: 1,

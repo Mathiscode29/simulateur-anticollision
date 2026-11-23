@@ -407,7 +407,7 @@ function drawTargets(pal: EPal, fs: number): void {
       const h = vec(rep.hdg, 1), hp = [q[0] + h.x * 22, q[1] - h.y * 22] as [number, number]; line(q, hp);
     }
     if (tr && assoc.has(t.id)) ctx.fillText(String(tr.n), q[0] + 10, q[1] - 8);
-    if (S.ecdis.layers.names && (active || view.range <= 3)) { ctx.fillStyle = pal.dim; ctx.fillText(t.ais.name, q[0] + 10, q[1] + 12); }
+    if (S.ecdis.layers.names && (active || view.range <= 6)) { ctx.fillStyle = pal.dim; ctx.fillText(t.ais.name + (t.type === 'nuc' && t.ais.status.includes('non maître') ? ' · NUC' : ''), q[0] + 10, q[1] + 12); }
   }
 }
 

@@ -20,7 +20,7 @@ describe('route prévue et écart latéral (XTE)', () => {
   });
   it('en suivant la route, le porteur passe au segment suivant et l’écart reste faible', () => {
     S.scen = 'c_wp'; applyScenarioEnv('c_wp'); S.env.windKn = 0; S.env.curKn = 0;
-    newScenario(); S.started = true;
+    S.env.faults = 'off'; newScenario(); S.started = true;
     let switched = false;
     for (let i = 0; i < 4 * 60 * 30; i++) {
       simStep();
@@ -39,7 +39,7 @@ describe('route prévue et écart latéral (XTE)', () => {
   it('rencontre après le point tournant : la cible est placée et la situation se crée sur la nouvelle route', () => {
     let ok = 0;
     for (let k = 0; k < 4; k++) {
-      S.scen = 'c_wp'; applyScenarioEnv('c_wp'); newScenario(); S.started = true;
+      S.scen = 'c_wp'; applyScenarioEnv('c_wp'); S.env.faults = 'off'; newScenario(); S.started = true;
       expect(S.targets.length).toBeGreaterThanOrEqual(1);
       for (let i = 0; i < 4 * 60 * 32; i++) {
         simStep();

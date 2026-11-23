@@ -96,7 +96,7 @@ export function stepT(t: Target, dt: number): void {
   const e = adiff(t.cmdHdg, t.hdg), rr = clamp(e * 0.06, -t.maxRot, t.maxRot);
   t.rot += (rr - t.rot) * Math.min(1, dt / t.tau);
   t.hdg = n360(t.hdg + t.rot * dt);
-  if (t.type !== 'nuc') t.stw += ((t.cmdStw - t.stw) / (t.cmdStw < t.stw ? t.dec : t.acc)) * dt;
+  t.stw += ((t.cmdStw - t.stw) / (t.cmdStw < t.stw ? t.dec : t.acc)) * dt; // un NUC (consigne 0) perd son erre
   const g = gv(t.hdg, t.stw, t.wind);
   t.vx = g.x; t.vy = g.y;
   t.x += g.x * K2N * dt; t.y += g.y * K2N * dt;

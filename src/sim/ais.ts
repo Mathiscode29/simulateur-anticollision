@@ -12,17 +12,16 @@
 import { S, type Ais, type Target, type TargetType, type Track } from '../core/state';
 import { K2N, adiff, brgOf, gauss, pick } from '../core/util';
 
-const NAMES = ['ALCYON', 'AQUILA', 'ARGO', 'BOREAS', 'CALYPSO', 'CASSIOPEE', 'CORMORAN', 'DELPHINUS', 'EOLE', 'FULMAR',
-  'GOELAND', 'HALCYON', 'IROISE', 'KESTREL', 'LYRA', 'MISTRAL', 'NEREIDE', 'ORION', 'PEGASE', 'PETREL', 'POLARIS',
-  'SIRIUS', 'SKUA', 'TRITON', 'VEGA', 'ZEPHYR', 'NORD STAR', 'BALTIC WAVE', 'ATLANTIC DAWN', 'NORTH SEA TRADER'];
-
 const STATUS: Record<TargetType, string> = {
   power: 'en route au moteur', small: 'en route au moteur', fish: 'en pêche', sail: 'à la voile',
   nuc: 'non maître de sa manœuvre', ram: 'capacité de manœuvre restreinte',
 };
 
-/** Équipement AIS tiré selon le type de navire. */
-export function makeAis(type: TargetType): Ais | null {
+/** Statut de navigation AIS correspondant au type de navire. */
+export const aisStatus = (type: TargetType): string => STATUS[type];
+
+/** Équipement AIS tiré selon le type de navire ; le nom émis est celui du navire. */
+export function makeAis(type: TargetType, name: string): Ais | null {
   const r = Math.random();
   let cls: 'A' | 'B' | null;
   if (type === 'sail') cls = r < 0.4 ? 'B' : null;
@@ -31,7 +30,7 @@ export function makeAis(type: TargetType): Ais | null {
   else cls = r < 0.95 ? 'A' : null;
   if (!cls) return null;
   const mid = pick([226, 227, 228, 235, 244, 255, 311, 351, 370, 538, 563, 636]);
-  return { mmsi: mid * 1e6 + Math.floor(Math.random() * 1e6), name: pick(NAMES), cls, on: true, next: S.t + Math.random() * 10, rep: null, status: STATUS[type] };
+  return { mmsi: mid * 1e6 + Math.floor(Math.random() * 1e6), name, cls, on: true, next: S.t + Math.random() * 10, rep: null, status: STATUS[type] };
 }
 
 /** Intervalle nominal (s) entre deux messages de position. */

@@ -5,6 +5,7 @@ import { radarStep, estimate, rainStep, SWP } from './radar';
 import { updateAlerts } from './alerts';
 import { routeStep } from './route';
 import { aiStep } from './rules';
+import { faultStep } from './faults';
 import { encStep, checkCol, finish } from './assessment';
 import { aisStep } from './ais';
 import { navStep } from './nav';
@@ -29,7 +30,7 @@ export function simStep(dt = DT): void {
   aisStep();
   radarStep(dt);
   S.aiAcc += dt;
-  if (S.aiAcc >= 2) { S.aiAcc = 0; for (const t of S.targets) aiStep(t); }
+  if (S.aiAcc >= 2) { S.aiAcc = 0; faultStep(2); for (const t of S.targets) aiStep(t); }
   S.encAcc += dt;
   if (S.encAcc >= 1) {
     S.encAcc = 0; encStep(); checkCol(); navStep(1);

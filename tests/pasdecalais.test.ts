@@ -15,7 +15,7 @@ const at = (lat: number, lon: number) => toXY(lat, lon);
 
 function start(key: string): void {
   S.scen = key; applyScenarioEnv(key); S.env.comp = 'disc';
-  newScenario(); S.started = true; S.paused = false;
+  S.env.faults = 'off'; newScenario(); S.started = true; S.paused = false;
 }
 /** Remplace le cap du porteur instantanément (ligne droite, régime établi). */
 function setHeading(h: number): void {

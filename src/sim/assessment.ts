@@ -5,7 +5,7 @@
  */
 import { S, logE, type Encounter, type Msg, type Report, type Target } from '../core/state';
 import { ROLE_TXT } from '../core/data';
-import { K2N, adiff, brgOf, cpaOf, fMin, n360, vec } from '../core/util';
+import { K2N, adiff, brgOf, cpaOf, fMin, fT, n360, vec } from '../core/util';
 import { SCEN } from './scenarios';
 import { roleOf } from './rules';
 import { currentXte } from './route';
@@ -31,10 +31,22 @@ export function encStep(): void {
           tid: t.id, role: roleOf(o, t, S.env.vis), t0: S.t, h0: o.hdg, v0: o.stw, th0: t.hdg, tv0: t.stw,
           tb0: n360(brgOf(rx, ry) - o.hdg), weOvertake: ob > 112.5 && ob < 247.5 && o.stw > t.stw,
           minR: range, fc: null, fs: null, maxDev: 0, maxRed: 0, crossedAhead: false, side: null, tgtActT: null, closed: false, tracked: false,
+          type0: t.type,
         };
       } else continue;
     }
     if (e.closed) continue;
+    // changement de statut de la cible (avarie, réparation) : nouvelle situation à partir de cet instant
+    if (e.type0 !== undefined && t.type !== e.type0) {
+      const nr = roleOf(o, t, S.env.vis), was = e.role;
+      e.type0 = t.type;
+      if (nr !== was) {
+        e.chg = `Situation modifiée à T+${fT(S.t)} : ${t.vname} ${t.type === 'nuc' ? 'est devenu non maître de sa manœuvre' : 'a recouvré sa manœuvre'}, vous passez de « ${ROLE_TXT[was] || was} » à « ${ROLE_TXT[nr] || nr} »`
+          + (nr === 'giveway18' ? ' : R18(a)(i), un navire à propulsion mécanique s\'écarte de la route d\'un navire non maître de sa manœuvre.' : '.');
+        Object.assign(e, { role: nr, t0: S.t, h0: o.hdg, v0: o.stw, th0: t.hdg, tv0: t.stw, fc: null, fs: null, maxDev: 0, maxRed: 0, crossedAhead: false, side: null, tgtActT: null });
+        logE(e.chg, 'warn');
+      }
+    }
     e.minR = Math.min(e.minR, range);
     if (S.tracks.some((k) => k.tid === t.id && k.state !== 'ACQ')) e.tracked = true;
     if (!e.tgtActT && (Math.abs(adiff(t.hdg, e.th0)) > 10 || t.stw < e.tv0 * 0.75)) e.tgtActT = S.t;
@@ -65,6 +77,7 @@ export function evalEnc(e: Encounter, t: Target, unfinished: boolean): { pen: nu
   const m: Msg[] = [], o = S.own;
   let pen = 0;
   const colD = ((o.L / 2 + t.L / 2) / 1852) * 0.7, A = firstAct(e), C = e.fc, r = e.role;
+  if (e.chg) m.push(['info', e.chg]);
   if (e.minR < colD) { pen += 100; m.push(['bad', 'Abordage.']); }
   else if (e.minR < 0.25) { pen += 35; m.push(['bad', `Passage à ${e.minR.toFixed(2)} NM : situation très rapprochée.`]); }
   else if (e.minR < 0.5) { pen += 12; m.push(['warn', `Distance minimale ${e.minR.toFixed(2)} NM : marge faible en haute mer (R8d : passer à distance suffisante).`]); }

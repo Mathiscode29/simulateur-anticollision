@@ -1,5 +1,5 @@
 /** Interface : commandes passerelle, réglages radar et ECDIS, vues, alertes, table des cibles, bilan, clavier et souris. */
-import { S, logE, type Compliance, type RadarSettings, type Visibility } from '../core/state';
+import { S, logE, type Compliance, type Faults, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
 import { brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
 import { LEVELS, SCEN, applyScenarioEnv, newScenario } from '../sim/scenarios';
@@ -86,6 +86,7 @@ const SEGS: Record<string, Seg> = {
   rainEnv: { g: () => (S.env.rain ? '1' : '0'), s: (v) => { S.env.rain = v === '1'; if (!S.env.rain) S.rainCells = []; } },
   night: { g: () => (S.env.night ? '1' : '0'), s: (v) => (S.env.night = v === '1') },
   comp: { g: () => S.env.comp, s: (v) => (S.env.comp = v as Compliance) },
+  faults: { g: () => S.env.faults, s: (v) => (S.env.faults = v as Faults) },
   scen: { g: () => S.scen, s: (v) => { S.scen = v; applyScenarioEnv(v); syncEnv(); } },
   routeShow: { g: () => (S.route?.show ? '1' : '0'), s: (v) => { if (S.route) S.route.show = v === '1'; } },
   xteLim: { g: () => String(S.route?.xteLim ?? 1), s: (v) => { if (S.route) S.route.xteLim = +v; } },

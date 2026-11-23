@@ -7,7 +7,7 @@
  * les voies du DST (laneShip, laneMeet, laneAhead, laneFill).
  */
 import { S, logE, newTssWatch, type Behaviour, type Env, type Route, type Target, type TargetType, type Visibility } from '../core/state';
-import { DEFAULT_SHIP, SHIPS, TELE, TELE_SEA, TT } from '../core/data';
+import { DEFAULT_SHIP, SHIPS, SHIP_NAMES, TELE, TELE_SEA, TT } from '../core/data';
 import { K2N, adiff, brgOf, clamp, n360, p3, pick, pm, rnd, vec } from '../core/util';
 import { gv, initOwnDynamics } from './physics';
 import { pickBeh, roleOf } from './rules';
@@ -69,6 +69,14 @@ export const SCEN: Record<string, Scenario> = {
     build() { const t = add('so', rnd(16, 19), pm(0, 0.1)); if (t) t.beh = 'passive'; add('any', rnd(18, 28), pm(2.5, 4)); } },
   c_contre: { n: 'Manœuvre à contresens', d: 'Face à face avec un navire qui vient sur bâbord. Saurez-vous le détecter à temps ?', lvl: 2, vis: 'good',
     build() { const t = add('headon', rnd(16, 18), pm(0, 0.1)); if (t) t.beh = 'wrong'; add('any', rnd(18, 28), pm(2.5, 4)); } },
+  c_avarie: { n: 'Avarie en croisement (R18)', lvl: 2, vis: 'good',
+    d: 'Un navire croise de bâbord : vous êtes privilégié. Il tombe en avarie de machine et devient non maître de sa manœuvre : la situation s’inverse.',
+    build() {
+      // l'avarie survient à TCPA ≈ 5,5 à 7 min : le navire perd son erre près de votre route
+      const T = rnd(16, 19), t = add('so', T, pm(0, 0.2));
+      if (t) { t.beh = 'late'; t.fault = { kind: 'engine', active: false, at: S.t + (T - rnd(5.5, 7)) * 60 }; }
+      add('overtaken', rnd(26, 30), pm(0.4, 0.6));
+    } },
   mix: { n: 'Trafic mixte', d: 'Six navires dont trois en route de collision, échelonnés.', lvl: 2, vis: null,
     build() {
       const k = shuffle<Kind>(['headon', 'gw', 'so', 'fish', 'overtake', 'sail']);
@@ -204,6 +212,13 @@ export function applyScenarioEnv(key: string): void {
   if (sc.env) Object.assign(S.env, sc.env);
 }
 
+/** Nom fictif sans doublon dans l'exercice. */
+function shipName(type: TargetType): string {
+  const list = SHIP_NAMES[type === 'fish' ? 'fish' : type === 'sail' ? 'sail' : 'merchant'];
+  const free = list.filter((n) => !S.targets.some((t) => t.vname === n));
+  return free.length ? pick(free) : `${pick(list)} ${S.nextTid}`;
+}
+
 export function mkT(type: TargetType, hdg: number, stw: number, x: number, y: number): Target {
   const T = TT[type], L = Math.round(rnd(T.L[0], T.L[1]));
   const t: Target = {
@@ -211,8 +226,9 @@ export function mkT(type: TargetType, hdg: number, stw: number, x: number, y: nu
     maxRot: L > 250 ? 0.45 : L > 150 ? 0.7 : L > 60 ? 1.1 : 2.5, tau: L > 150 ? 25 : L > 60 ? 14 : 6,
     acc: L > 150 ? 220 : 90, dec: L > 150 ? 380 : 130, wind: wOf(type), rcs: clamp(L / 70, 0.3, 5), beh: pickBeh(),
     ai: { state: 'transit', role: null, cool: 0 }, echo: null, nextFish: S.t + rnd(600, 1200), vx: 0, vy: 0,
-    ais: makeAis(type),
+    ais: null, vname: shipName(type),
   };
+  t.ais = makeAis(type, t.vname);
   const g = gv(hdg, stw, t.wind);
   t.vx = g.x; t.vy = g.y;
   S.targets.push(t);

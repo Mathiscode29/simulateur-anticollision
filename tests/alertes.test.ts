@@ -7,7 +7,7 @@ import { ACQ_TIME, cancelTrack } from '../src/sim/radar';
 
 function start(): void {
   S.scen = 'r15'; applyScenarioEnv('r15'); S.env.comp = 'disc';
-  newScenario(); S.started = true; S.radar.zone = 12; S.radar.cpaLim = 1; S.radar.tcpaLim = 30;
+  S.env.faults = 'off'; newScenario(); S.started = true; S.radar.zone = 12; S.radar.cpaLim = 1; S.radar.tcpaLim = 30;
 }
 const run = (s: number) => { for (let i = 0; i < s * 4; i++) simStep(); };
 

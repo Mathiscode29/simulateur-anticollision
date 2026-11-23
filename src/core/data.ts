@@ -42,3 +42,17 @@ export const ROLE_TXT: Partial<Record<Role, string>> = {
 
 export const RANGES = [0.75, 1.5, 3, 6, 12, 24];
 export const RINGS: Record<number, number> = { 0.75: 0.25, 1.5: 0.25, 3: 0.5, 6: 1, 12: 2, 24: 4 };
+
+/**
+ * Noms de navires fictifs (AIS, messages). Tirés sans doublon dans un exercice.
+ * Commerce, pêche et plaisance ont chacun leur liste.
+ */
+export const SHIP_NAMES: Record<'merchant' | 'fish' | 'sail', string[]> = {
+  merchant: ['ALCYON', 'AQUILA', 'ARGO', 'BOREAS', 'CALYPSO', 'CASSIOPEE', 'CORMORAN', 'DELPHINUS', 'EOLE', 'FULMAR',
+    'GOELAND', 'HALCYON', 'IROISE', 'KESTREL', 'LYRA', 'MISTRAL', 'NEREIDE', 'ORION', 'PEGASE', 'PETREL', 'POLARIS',
+    'SIRIUS', 'SKUA', 'TRITON', 'VEGA', 'ZEPHYR', 'NORD STAR', 'BALTIC WAVE', 'ATLANTIC DAWN', 'NORTH SEA TRADER',
+    'CAP FREHEL', 'MERIDIAN', 'OCEAN PRIDE', 'SEA HARMONY', 'STELLA MARIS', 'TRADEWIND', 'ANDROMEDA', 'ALDEBARAN', 'ALTAIR', 'RIGEL'],
+  fish: ['AR VAG', 'PEN HIR', 'MARIE-LOUISE', 'SAINT-GUENOLE', 'LES DEUX FRERES', 'KER ANNA', 'BREIZH IZEL', 'L\'ESPERANCE',
+    'NOTRE-DAME', 'MOR BRAS', 'GWALARN', 'STEREDENN'],
+  sail: ['ALIZE', 'SAMSARA', 'TANGAROA', 'KALLISTE', 'ODYSSEE', 'LIBERTALIA', 'NAUSICAA', 'FREYA', 'MELUSINE', 'SILLAGE'],
+};

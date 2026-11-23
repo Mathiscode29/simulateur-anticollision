@@ -29,7 +29,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 ## Phase 1 bis — Exercices et route
 - [x] Route prévue en rouge sur le radar, couloir d'écart, points tournants, XTE / distance et relèvement du WP
 - [x] Tenue de route dans le bilan (écart maximal, temps hors couloir, reprise de la route)
-- [x] 18 exercices sur trois niveaux (fondamentaux, situations combinées, avancé), dont rencontres après point tournant
+- [x] 22 exercices sur quatre niveaux (fondamentaux, situations combinées, avancé, Pas-de-Calais), dont rencontres après point tournant et avarie en croisement
 - [ ] Éditeur d'exercices et partage par lien (voir phase 4)
 
 ## Phase 2 — Zone réelle et DST
@@ -40,7 +40,8 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Bathymétrie réelle libre (EMODnet) à la place du modèle schématique ; marée (hauteur et courants)
 - [ ] Pêcheurs dans la zone de séparation, routes des ferries Douvres–Calais
 - [ ] Zone d'Ouessant (DST d'Ouessant)
-- [ ] Interaction entre cibles (elles s'évitent entre elles)
+- [x] Interaction entre cibles : elles s'évitent entre elles selon le RIPAM, mal en trafic imprévisible (quasi-abordages, abordages)
+- [x] Avaries (machine, barre, abordage) et changements de statut annoncés par VHF / AIS, rôle du porteur réévalué (R18)
 
 ## Phase 3 — Interface professionnelle (priorité ordinateur)
 - [x] Présentation radar selon MSC.192(79) / SN.1/Circ.243 : échelles, RM/TM, décentrage, 2 EBL/VRM, 4 PI, curseur, symboles, positions passées, données cible (grille : docs/conformite-radar.md)

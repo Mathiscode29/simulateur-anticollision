@@ -9,7 +9,7 @@ function start(scen: string, comp: 'disc' | 'real' | 'hostile' = 'real'): void {
   S.scen = scen;
   applyScenarioEnv(scen); if (!SCEN[scen].vis) S.env.vis = 'good';
   S.env.comp = comp;
-  newScenario();
+  S.env.faults = 'off'; newScenario();
   S.started = true;
   S.radar.zone = 12;
 }
