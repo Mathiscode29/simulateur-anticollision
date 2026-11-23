@@ -21,9 +21,10 @@ import { TELE } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
 import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
 import { dayShapes, navLights3D } from '../sim/visual';
+import { init3D, render3D, use3D } from './outside3d';
 
-const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
-const FOV = 62, FOV_BINO = 7.5;
+export const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
+export const FOV = 62, FOV_BINO = 7.5;
 
 /** Regard : relèvement relatif (± 90°), vue arrière, jumelles. */
 export const look = { rel: 0, aft: false, binoc: false, inst: true };
@@ -48,6 +49,8 @@ export function initOutside(canvas: HTMLCanvasElement): void {
   cv.addEventListener('pointerup', () => { drag = null; });
   cv.addEventListener('pointerleave', () => { hover = null; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); look.binoc = e.deltaY < 0; }, { passive: false });
+  // rendu WebGL sous le calque 2D (cadre, jumelles, bandeau, console) ; repli sur le rendu 2D sans WebGL
+  if (cv.parentElement) init3D(cv.parentElement);
 }
 
 function resize(): void {
@@ -57,7 +60,7 @@ function resize(): void {
   cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
 }
 
-const fov = () => (look.binoc ? FOV_BINO : FOV);
+export const fov = (): number => (look.binoc ? FOV_BINO : FOV);
 
 // ---------------------------------------------------------------- couleurs
 
@@ -83,12 +86,12 @@ const veil = (d: number, V: number): number => 1 - Math.exp((-3 * d) / V);
 
 /** Limites supérieures (kn) des forces de Beaufort 0 à 11, et hauteur significative probable en mer ouverte (m, OMM). */
 const BF = [1, 3, 6, 10, 16, 21, 27, 33, 40, 47, 55, 63];
-const HS = [0, 0.1, 0.2, 0.6, 1, 2, 3, 4, 5.5, 7, 9, 11.5, 14];
+export const HS = [0, 0.1, 0.2, 0.6, 1, 2, 3, 4, 5.5, 7, 9, 11.5, 14];
 export function beaufort(kn: number): number { let b = 0; while (b < 12 && kn > BF[b]) b++; return b; }
 const CAPS = [0, 0, 0, 0.01, 0.04, 0.1, 0.18, 0.28, 0.38, 0.48, 0.55, 0.6, 0.65];
 
 /** Roulis et tangage du porteur (degrés) : amplitude modeste pour un VLCC chargé, périodes 14 s et 9 s. */
-function motion(): { roll: number; pitch: number } {
+export function motion(): { roll: number; pitch: number } {
   const hs = HS[beaufort(S.env.windKn)], t = S.t;
   const ar = Math.min(3, 0.32 * hs), ap = Math.min(1.2, 0.12 * hs);
   return { roll: ar * (Math.sin((2 * Math.PI * t) / 14) + 0.3 * Math.sin((2 * Math.PI * t) / 23 + 1)), pitch: ap * Math.sin((2 * Math.PI * t) / 9 + 0.7) };
@@ -151,6 +154,15 @@ export function drawOutside(): void {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
+  if (use3D()) {
+    ctx.clearRect(0, 0, W, H);
+    render3D({ W, H, yaw, rel, hfov: hf, binoc: look.binoc, aft: look.aft });
+    const bf = beaufort(S.env.windKn);
+    if (look.binoc) binocMask3D(); else { bridgeFrame(sk); if (look.inst) instruments(bf); }
+    hud(hf, bf);
+    return;
+  }
+
   // monde (incliné par le roulis apparent)
   ctx.save();
   ctx.translate(W / 2, cy); ctx.rotate(-tilt); ctx.translate(-W / 2, -cy);
@@ -189,7 +201,7 @@ function stars(yH: number): void {
  * Relief schématique de la carte : ondulation de base et sommets notables (falaises de Douvres et caps au
  * Pas-de-Calais ; Rocher de Gibraltar et Djebel Moussa au détroit de Gibraltar). Illustration, pas un MNT.
  */
-function landHeight(x: number, y: number): { h: number; cliff: number } {
+export function landHeight(x: number, y: number): { h: number; cliff: number } {
   let h = CHART.landBase * (1 + 1.67 * (0.5 + 0.5 * Math.sin(1.7 * x + 0.3) * Math.cos(1.3 * y - 0.7))), cl = 0;
   for (const c of CHART.relief) {
     const k = Math.exp(-((x - c.x) ** 2 + (y - c.y) ** 2) / (2 * c.r * c.r));
@@ -200,7 +212,7 @@ function landHeight(x: number, y: number): { h: number; cliff: number } {
 }
 
 /** Caractère d'un feu (Fl(n), Iso, Oc, Mo(A)) : allumé à l'instant t ? Rythmes simplifiés. */
-function charOn(light: string, t: number): boolean {
+export function charOn(light: string, t: number): boolean {
   const per = Number(/(\d+(?:\.\d+)?)\s*s\b/.exec(light)?.[1] ?? 10), ph = ((t % per) + per) % per;
   const grp = /Fl\s*\((\d+)\)/.exec(light);
   if (grp) { const n = Number(grp[1]); return ph < n * 1.4 && ph % 1.4 < 0.5; }
@@ -423,7 +435,7 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
 }
 
 /** Rythmes simplifiés des feux des marques (caractères non vérifiés pour la plupart : illustration). */
-function flashOn(kind: string, id: string): boolean {
+export function flashOn(kind: string, id: string): boolean {
   const ph = (S.t + id.charCodeAt(0) * 1.7) % 15;
   switch (kind) {
     case 'N': return (S.t * 1.0) % 1 < 0.3;
@@ -544,6 +556,15 @@ function bridgeFrame(sk: Sky): void {
     const x = W / 2 + Math.tan(rel * D2R) * cam.F;
     ctx.fillRect(x - 2.5, 0, 5, H);
   }
+}
+
+/** Masque des jumelles sur le calque 2D transparent posé sur le rendu WebGL. */
+function binocMask3D(): void {
+  const R = Math.min(H * 0.47, W * 0.26), dx = R * 0.62;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath(); ctx.arc(W / 2 - dx, H / 2, R, 0, 7); ctx.arc(W / 2 + dx, H / 2, R, 0, 7); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function binocMask(): void {

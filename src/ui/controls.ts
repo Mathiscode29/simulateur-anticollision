@@ -12,6 +12,7 @@ import { cursor, geo, resetTM } from './render';
 import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
 import { checkRoute, depthAt, tssAt } from '../sim/chart';
 import { look, lookBy } from './outside';
+import { set3D, use3D } from './outside3d';
 import { RP, currentKey, openDebrief, seek, situationRows, stepKey, togglePlay } from './debrief';
 import { fmtT } from '../sim/debrief';
 import { fmtLat, fmtLon, toLL } from '../core/geo';
@@ -220,6 +221,7 @@ const ACT: Record<string, (v: string) => void> = {
   look(v) { lookBy(+v); },
   lookFwd() { look.rel = 0; look.aft = false; },
   lookAft() { look.aft = !look.aft; look.rel = 0; },
+  r3d() { set3D(!use3D()); try { localStorage.setItem('rendu3d', use3D() ? '1' : '0'); } catch { /* stockage indisponible */ } },
   binoc() { look.binoc = !look.binoc; },
   inst() { look.inst = !look.inst; },
   ecZoom(v) { ecZoom(+v); },
@@ -322,6 +324,7 @@ export function upd(): void {
   updDebrief();
   document.querySelector('.vbar [data-act=binoc]')?.classList.toggle('on', look.binoc);
   document.querySelector('.vbar [data-act=lookAft]')?.classList.toggle('on', look.aft);
+  document.querySelector('.vbar [data-act=r3d]')?.classList.toggle('on', use3D());
   document.querySelector('.vbar [data-act=inst]')?.classList.toggle('on', look.inst);
   const o = S.own, Rs = S.radar, e = S.env;
   $('clock').textContent = 'T+' + fT(S.t);

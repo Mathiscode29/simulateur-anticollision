@@ -72,7 +72,9 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Disposition « Passerelle » : triangle du chef de quart (visuel en haut, radar en bas à gauche, ECDIS en bas à droite)
 - [x] Mouvements de plate-forme (roulis, tangage) et état de la mer selon le vent (Beaufort, moutons)
 - [x] Console d'instruments dans la vue extérieure, reflets des feux, éclairage de pont, bouées détaillées
+- [x] V1.1 (V5a) : vue extérieure en WebGL (three.js) : mer à vagues de Gerstner, reflets et moutons, relief côtier, lumières de côte, silhouettes par type de navire, brouillard de Koschmieder, rotondité ; rendu 2D de secours
 - [ ] Signaux sonores (brume, R34) audibles et relevés au visuel
+- [ ] Navires au mouillage, ports et feux de port ; silhouettes plus détaillées (V5a suite)
 
 ## Garde-fous permanents
 - Ergonomie inspirée des consoles du marché, sans logo ni charte de constructeur : la norme IEC suffit
