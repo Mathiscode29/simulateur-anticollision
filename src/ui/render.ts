@@ -19,6 +19,7 @@ import { RINGS } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, vec } from '../core/util';
 import { ownWater } from '../sim/physics';
 import { SWP, seaLevel, trialRemaining, trueV } from '../sim/radar';
+import { DT } from '../sim/loop';
 import { isUnackedDanger, isUnackedLost } from '../sim/alerts';
 import { CHART, NRAYS } from '../sim/chart';
 import { fmtLat, fmtLon, toLL } from '../core/geo';
@@ -26,6 +27,14 @@ import { aisAssociated, aisLost, aisPos } from '../sim/ais';
 
 let cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
 let W = 0, DPR = 1;
+
+/**
+ * Balayage continu : la simulation avance par pas de 0,25 s (36° de rotation d'antenne), l'écran est rafraîchi à chaque
+ * image. L'affichage est daté d'un pas en retard sur la simulation (tv = S.t − DT + fraction écoulée du pas suivant) :
+ * tout ce que le faisceau a éclairé avant tv est déjà calculé, et un écho n'apparaît qu'au passage du trait de balayage.
+ */
+let frac = 0;
+export function setSimFrac(f: number): void { frac = clamp(f, 0, DT); }
 /** Position du curseur sur le scope (pixels CSS), null hors du scope. */
 export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
 
@@ -128,7 +137,7 @@ export function draw(): void {
   const R = S.radar, o = S.own, pal = PALETTES[R.palette];
   if (R.motion === 'TM' && Math.hypot(o.x - R.tmC.x, o.y - R.tmC.y) > R.range * 0.52) resetTM();
   const G = geo(), { w, cx, cy, Rr, k, rot, P, Wp } = G;
-  const now = performance.now(), blink = Math.floor(now / 450) % 2 === 0;
+  const now = performance.now(), blink = Math.floor(now / 450) % 2 === 0, tv = S.t - DT + frac;
   const fs = clamp(w / 68, 10, 14), sz = clamp(w / 120, 6, 10);
   const [ox, oy] = P(0, 0);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -140,8 +149,8 @@ export function draw(): void {
   // clutter (mer, pluie, bruit) : positions relatives au porteur
   ctx.fillStyle = pal.echo;
   for (const p of S.clutter) {
-    const a = 1 - (0.6 * (S.t - p.t)) / SWP;
-    if (a <= 0 || p.r > R.range * 1.6) continue;
+    const ag = tv - p.t, a = 1 - (0.6 * ag) / SWP;
+    if (ag < 0 || ag >= SWP || p.r > R.range * 1.6) continue;
     ctx.globalAlpha = a * Math.min(1, p.s);
     const v = vec(p.b, p.r), q = P(v.x, v.y);
     ctx.fillRect(q[0] - 1, q[1] - 1, 2, 2);
@@ -173,7 +182,7 @@ export function draw(): void {
     for (let i = 0; i < NRAYS; i++) {
       const r0 = co.r0[i];
       if (r0 > maxR) continue;
-      const ag = S.t - co.t[i];
+      const ag = tv - (co.t[i] <= tv ? co.t[i] : co.tp[i]);
       if (ag > SWP * 1.05 || ag < 0) continue;
       const r1 = Math.min(co.r1[i], r0 + co.band[i]), b = i * 0.5;
       ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.3, 0.95);
@@ -186,10 +195,10 @@ export function draw(): void {
   // bouées et bateaux-feux
   ctx.fillStyle = pal.echo;
   for (const m of CHART.marks) {
-    const t0 = S.markEcho[m.id];
-    if (t0 === undefined) continue;
-    const ag = S.t - t0;
-    if (ag > SWP * 1.05) continue;
+    const me = S.markEcho[m.id];
+    if (me === undefined) continue;
+    const ag = tv - (me.t <= tv ? me.t : me.tp);
+    if (ag < 0 || ag > SWP * 1.05) continue;
     const q = Wp(m.x, m.y), wd = Math.max(3, Math.hypot(m.x - o.x, m.y - o.y) * k * (R.band === 'X' ? 1 : 1.8) * D2R), dp = m.kind === 'lv' ? 3.5 : 2.5;
     ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.25, 1);
     ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate((brgOf(m.x - o.x, m.y - o.y) - rot) * D2R); ctx.fillRect(-wd / 2, -dp / 2, wd, dp); ctx.restore();
@@ -200,10 +209,10 @@ export function draw(): void {
   ctx.fillStyle = pal.echo;
   const beam = (R.band === 'X' ? 1.0 : 1.8) * D2R;
   for (const t of S.targets) {
-    const e = t.echo;
+    const e = t.echo && t.echo.t <= tv ? t.echo : t.echoPrev;
     if (!e) continue;
-    const ag = S.t - e.t;
-    if (ag > SWP * 1.05) continue;
+    const ag = tv - e.t;
+    if (ag < 0 || ag > SWP * 1.05) continue;
     const q = Wp(e.x, e.y);
     if (Math.hypot(q[0] - cx, q[1] - cy) > Rr + 10) continue;
     ctx.globalAlpha = clamp(1 - (0.5 * ag) / SWP, 0.25, 1);
@@ -372,14 +381,18 @@ export function draw(): void {
   }
   ctx.setLineDash([]);
 
-  // balayage (masqué en temps accéléré)
-  if (S.ts <= 2 && !S.paused) {
-    const a = (S.sweep - rot) * D2R, L = R.range * 3 * k;
-    for (let i = 0; i < 10; i++) {
-      ctx.strokeStyle = pal.sym; ctx.globalAlpha = 0.22 - i * 0.02; ctx.lineWidth = 2;
-      const b = a - i * 0.035;
-      line(ox, oy, ox + Math.sin(b) * L, oy - Math.cos(b) * L);
+  // balayage continu (masqué au-delà de ×4 : la rotation devient trop rapide pour être suivie) :
+  // trait de balayage et traînée lumineuse en secteurs pleins dégradés
+  if (S.ts <= 4 && !S.paused) {
+    const a = (S.sweep - (360 * (S.t - tv)) / SWP - rot) * D2R, L = R.range * 3 * k, wd = 0.022, N = 16;
+    ctx.fillStyle = pal.sym;
+    for (let i = 0; i < N; i++) {
+      const b1 = a - i * wd, b0 = b1 - wd - 0.002;
+      ctx.globalAlpha = 0.16 * (1 - i / N);
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.arc(ox, oy, L, b0 - Math.PI / 2, b1 - Math.PI / 2); ctx.closePath(); ctx.fill();
     }
+    ctx.strokeStyle = pal.sym; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+    line(ox, oy, ox + Math.sin(a) * L, oy - Math.cos(a) * L);
     ctx.globalAlpha = 1;
   }
 

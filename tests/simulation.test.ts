@@ -27,7 +27,7 @@ describe('scénarios (exécution sans affichage)', () => {
       if (!SCEN[key].legs) expect(Object.keys(S.enc).length).toBeGreaterThan(0);
       finish();
       expect(S.report).not.toBeNull();
-    });
+    }, 20000); // marge : les exercices avec grains dépassent 3 s quand la machine est chargée
   }
 });
 

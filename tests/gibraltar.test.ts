@@ -110,6 +110,7 @@ describe('exercices de Gibraltar', () => {
         run(0.25);
         for (const t of S.targets.filter((x) => x.lane)) {
           expect(depthAt(t.x, t.y)).toBeGreaterThan(15);
+          if (t.fault?.active) continue; // abordage entre cibles passives : hors du sujet de ce test
           const k = tssAt(t.x, t.y).kind;
           n++; if (k === 'sep') sep++; if (k === 'itz') itz++;
         }

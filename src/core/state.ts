@@ -54,7 +54,9 @@ export interface Target {
   id: number; type: TargetType; name: string; L: number;
   x: number; y: number; hdg: number; stw: number; cmdHdg: number; cmdStw: number; baseHdg: number; baseStw: number; rot: number;
   maxRot: number; tau: number; acc: number; dec: number; wind: number; rcs: number;
-  beh: Behaviour; ai: TargetAI; echo: Echo | null; nextFish: number; vx: number; vy: number;
+  beh: Behaviour; ai: TargetAI; echo: Echo | null;
+  /** Écho du tour d'antenne précédent (affichage continu du balayage : l'écran a un léger retard sur la simulation). */
+  echoPrev?: Echo | null; nextFish: number; vx: number; vy: number;
   ais: Ais | null;
   /** Nom du navire (affiché par l'AIS, utilisé dans les messages). */
   vname: string;
@@ -108,7 +110,8 @@ export interface EcdisSettings {
 }
 
 /** Échos de côte : distance d'entrée (r0) et de sortie (r1) par rayon de 0,5°, instant du dernier éclairement. */
-export interface CoastRadar { ox: number; oy: number; r0: Float32Array; r1: Float32Array; t: Float32Array; band: Float32Array }
+/** Rayons de côte : t = instant du dernier passage du faisceau ayant donné un écho, tp = celui du passage précédent. */
+export interface CoastRadar { ox: number; oy: number; r0: Float32Array; r1: Float32Array; t: Float32Array; tp: Float32Array; band: Float32Array }
 
 export interface ReportItem { tid?: number; label: string; name: string; L: number; role: string; msgs: Msg[]; other: string }
 
@@ -182,7 +185,8 @@ export interface State {
   chart: 'open' | 'pdc';
   coast: CoastRadar | null;
   /** Dernier éclairement radar des bouées et bateaux-feux (par identifiant). */
-  markEcho: Record<string, number>;
+  /** Échos des bouées : instant du dernier passage du faisceau (t) et du précédent (tp). */
+  markEcho: Record<string, { t: number; tp: number }>;
   /** Trace du porteur (toutes les 10 s) pour l'ECDIS. */
   ownTrack: { t: number; x: number; y: number }[];
   tss: TssWatch;

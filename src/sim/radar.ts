@@ -76,7 +76,7 @@ export function coastStep(): void {
   if (c && Math.hypot(o.x - c.ox, o.y - c.oy) < 0.05) return;
   const r = coastRays(o.x, o.y);
   const band = c?.band ?? Float32Array.from({ length: NRAYS }, (_, i) => bandOf(i));
-  S.coast = { ox: o.x, oy: o.y, r0: r.r0, r1: r.r1, t: c?.t ?? new Float32Array(NRAYS).fill(-1e9), band };
+  S.coast = { ox: o.x, oy: o.y, r0: r.r0, r1: r.r1, t: c?.t ?? new Float32Array(NRAYS).fill(-1e9), tp: c?.tp ?? new Float32Array(NRAYS).fill(-1e9), band };
 }
 
 /** Vrai si un point situé au relèvement b et à la distance r est masqué par la terre. */
@@ -85,12 +85,17 @@ export function masked(b: number, r: number): boolean {
   return !!c && r > c.r0[rayIndex(b)] + 0.03;
 }
 
+/**
+ * Pas du radar : le faisceau balaie le secteur [a0, a0 + d] pendant dt. Chaque écho est daté de l'instant exact
+ * où le faisceau passe sur son relèvement (et non de la fin du pas), ce qui permet un affichage continu du balayage.
+ */
 export function radarStep(dt: number): void {
   const a0 = S.sweep, d = Math.min(360, (360 * dt) / SWP), o = S.own;
   S.sweep = (a0 + d) % 360;
+  const t0 = S.t - dt, tc = (b: number) => Math.min(S.t, t0 + ((((b - a0) % 360) + 360) % 360) / 360 * SWP);
   for (const t of S.targets) {
     const dx = t.x - o.x, dy = t.y - o.y, b = brgOf(dx, dy);
-    if (inSweep(b, a0, d)) paint(t, dx, dy, b);
+    if (inSweep(b, a0, d)) paint(t, dx, dy, b, tc(b));
   }
   // côte : rayons éclairés pendant ce pas
   coastStep();
@@ -101,7 +106,7 @@ export function radarStep(dt: number): void {
       const i = (i0 + k) % NRAYS;
       if (!inSweep(i * step, a0, d) || c.r0[i] > 32) continue;
       const v = vec(i * step, c.r0[i]), att = rainAttenuation(o.x + v.x, o.y + v.y);
-      if (att * (Math.random() < 0.96 ? 3 : 0.1) > thr) c.t[i] = S.t;
+      if (att * (Math.random() < 0.96 ? 3 : 0.1) > thr) { c.tp[i] = c.t[i]; c.t[i] = tc(i * step); }
     }
   }
   // bouées et bateaux-feux
@@ -113,10 +118,11 @@ export function radarStep(dt: number): void {
     if (masked(b, r)) continue;
     const rcs = m.kind === 'lv' ? 3 : 0.4, rmax = 3 + 6 * Math.sqrt(rcs);
     const s = ((rcs * (0.6 + 0.8 * Math.random())) / (1 + Math.pow(r / rmax, 4))) * rainAttenuation(m.x, m.y);
-    if (s >= Math.max(gainThreshold(), seaLevel() * 1.4 * Math.exp(-r / clutR()))) S.markEcho[m.id] = S.t;
+    if (s >= Math.max(gainThreshold(), seaLevel() * 1.4 * Math.exp(-r / clutR()))) S.markEcho[m.id] = { t: tc(b), tp: S.markEcho[m.id]?.t ?? -1e9 };
   }
-  // clutter de mer, bruit récepteur et grains : régénérés sur le secteur balayé
-  S.clutter = S.clutter.filter((p) => !inSweep(p.b, a0, d));
+  // clutter de mer, bruit récepteur et grains : régénérés sur le secteur balayé ; les points du tour précédent sont
+  // conservés jusqu'à ce que l'affichage (en léger retard) les ait remplacés
+  S.clutter = S.clutter.filter((p) => S.t - p.t <= SWP + dt);
   const band = S.radar.band === 'X' ? 1 : 0.45;
   const cR = clutR(), sea = seaLevel(), thr = gainThreshold();
   const dens = Math.min(3, Math.pow(S.env.windKn / 10, 2) * 0.6) * band;
@@ -125,12 +131,13 @@ export function radarStep(dt: number): void {
     const r = cR * -Math.log(1 - Math.random()) * 0.7;
     const s = Math.random() * Math.exp(-r / cR) * 1.4 * (0.7 + 0.3 * band);
     if (s < sea || s < thr || r > 24) continue;
-    S.clutter.push({ b: (a0 + Math.random() * d) % 360, r, s, t: S.t });
+    const b = (a0 + Math.random() * d) % 360;
+    S.clutter.push({ b, r, s, t: tc(b) });
   }
   // bruit récepteur quand le gain est poussé
   if (S.radar.gain > 75) {
     const nn = Math.floor(((S.radar.gain - 75) / 25) * 1.2 * d + Math.random());
-    for (let i = 0; i < nn; i++) S.clutter.push({ b: (a0 + Math.random() * d) % 360, r: Math.random() * S.radar.range * 1.1, s: 0.3 + Math.random() * 0.3, t: S.t });
+    for (let i = 0; i < nn; i++) { const b = (a0 + Math.random() * d) % 360; S.clutter.push({ b, r: Math.random() * S.radar.range * 1.1, s: 0.3 + Math.random() * 0.3, t: tc(b) }); }
   }
   // pluie
   if (S.env.rain) {
@@ -147,7 +154,7 @@ export function radarStep(dt: number): void {
         if (!inSweep(b, a0, d)) continue;
         const s = Math.random() * (S.radar.band === 'X' ? 0.9 : 0.4);
         if (s < ftc * 0.9 || s < thr) continue;
-        S.clutter.push({ b, r: Math.hypot(px, py), s, t: S.t });
+        S.clutter.push({ b, r: Math.hypot(px, py), s, t: tc(b) });
       }
     }
   }
@@ -157,7 +164,7 @@ function inRain(x: number, y: number): boolean {
   return S.env.rain && S.rainCells.some((c) => Math.hypot(x - c.x, y - c.y) < c.r);
 }
 
-function paint(t: Target, dx: number, dy: number, b: number): void {
+function paint(t: Target, dx: number, dy: number, b: number, tb: number): void {
   const r = Math.hypot(dx, dy), small = t.rcs < 1;
   if (masked(b, r)) return; // derrière la terre : pas d'écho
   const rcs = t.rcs * (S.radar.band === 'S' && small ? 0.8 : 1);
@@ -168,7 +175,8 @@ function paint(t: Target, dx: number, dy: number, b: number): void {
   if (inRain(t.x, t.y)) s *= 1 - (S.radar.rain / 100) * 0.5; // le FTC affaiblit aussi les échos dans le grain
   const supp = Math.max(gainThreshold(), seaLevel() * 1.4 * Math.exp(-r / clutR()));
   if (s < supp) return;
-  t.echo = { x: t.x, y: t.y, b, r, t: S.t };
+  t.echoPrev = t.echo;
+  t.echo = { x: t.x, y: t.y, b, r, t: tb };
   const tr = S.tracks.find((k) => k.tid === t.id);
   if (tr) addObs(tr, dx, dy);
   else if (S.radar.zone > 0 && r <= S.radar.zone && S.tracks.length < TRACK_CAPACITY) {

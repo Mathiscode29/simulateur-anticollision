@@ -38,7 +38,7 @@ tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sa
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
             trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D et marques de jour),
-            debrief.test.ts (enregistrement, interpolation, moments clés)
+            debrief.test.ts (enregistrement, interpolation, moments clés), radar.test.ts (datation des échos, balayage continu)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md, carte-gibraltar.md (sources et limites des cartes)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
@@ -50,7 +50,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 
 - Langue : interface, commentaires, messages de commit et docs en **français**, vocabulaire professionnel maritime (CPA/TCPA, relèvement, aspect, abattée, privilégié/non privilégié…).
 - Unités : milles nautiques, nœuds, degrés, secondes. Repère local x = est, y = nord ; caps et relèvements de 0 à 360 dans le sens horaire depuis le nord.
-- Pas de simulation fixe de 0,25 s (`DT`), indépendant de l'affichage et de l'accélération du temps.
+- Pas de simulation fixe de 0,25 s (`DT`), indépendant de l'affichage et de l'accélération du temps. Le radar date chaque écho du passage du faisceau sur son relèvement ; l'écran radar est affiché avec un pas de retard (`tv = S.t − DT + fraction`) pour un balayage continu.
 - L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
 - Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'` ou `'gib'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneMeetRoute` (au croisement de la route prévue), `laneAhead`, `laneAt`, `laneFill` (identifiants de voie : NE/SW au Pas-de-Calais, W/E à Gibraltar). Nouvelle carte : un `ChartSource` dans `src/core/charts/` (types communs dans `types.ts`), enregistré dans `SOURCES` de `sim/chart.ts`.
 - Positions : le moteur travaille en plan local (NM) ; toute donnée géographique est saisie en WGS 84 et convertie par `core/geo.ts`. Affichage au format marin (51°02,345'N 001°23,456'E).

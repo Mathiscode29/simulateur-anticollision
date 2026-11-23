@@ -2,7 +2,7 @@ import './ui/style.css';
 import { S } from './core/state';
 import { newScenario } from './sim/scenarios';
 import { simStep, DT } from './sim/loop';
-import { initRender, draw } from './ui/render';
+import { initRender, draw, setSimFrac } from './ui/render';
 import { initEcdis, drawEcdis } from './ui/ecdis';
 import { initOutside, drawOutside } from './ui/outside';
 import { initDebrief, drawDebrief } from './ui/debrief';
@@ -28,7 +28,9 @@ function frame(now: number): void {
     acc += rdt * S.ts;
     let n = 0;
     while (acc >= DT && n < 200) { simStep(DT); acc -= DT; n++; if (S.over) break; }
+    if (n >= 200) acc = 0; // retard irrattrapable : on repart d'un pas entier
   }
+  setSimFrac(acc);
   const v = currentView;
   if (v === 'radar' || v === 'split' || v === 'bridge') draw();
   if (v === 'ecdis' || v === 'split' || v === 'bridge') drawEcdis();

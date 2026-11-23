@@ -11,7 +11,7 @@ import { PAS_DE_CALAIS } from '../core/charts/pasdecalais';
 import { GIBRALTAR } from '../core/charts/gibraltar';
 import type { ChartBank, ChartMark, ChartSource, Relief } from '../core/charts/types';
 import { setGeoRef, toXY } from '../core/geo';
-import { brgOf, clamp } from '../core/util';
+import { brgOf, clamp, vec } from '../core/util';
 
 export type ChartKey = 'open' | 'pdc' | 'gib';
 export interface XY { x: number; y: number }
@@ -261,7 +261,13 @@ export const laneOf = (id: string, c: Chart = CHART): LaneG | undefined => c.lan
  */
 export function laneSteer(l: LaneG, x: number, y: number, off: number, dir: 1 | -1): number {
   const p = projOnPolyline(l.axis, x, y), L = polyLength(l.axis);
-  const s = clamp(p.s + dir * 1.5, 0, L), q = pointAt(l.axis, s);
+  // au-delà d'une extrémité de l'axe, le point visé est prolongé dans l'alignement du dernier tronçon (pas de demi-tour)
+  const A = l.axis, n = A.length, A0 = A[0], A1 = A[1], B0 = A[n - 2], B1 = A[n - 1];
+  const l0 = Math.hypot(A1.x - A0.x, A1.y - A0.y) || 1, l1 = Math.hypot(B1.x - B0.x, B1.y - B0.y) || 1;
+  const bs = ((x - A0.x) * (A1.x - A0.x) + (y - A0.y) * (A1.y - A0.y)) / l0, be = ((x - B1.x) * (B1.x - B0.x) + (y - B1.y) * (B1.y - B0.y)) / l1;
+  const s0 = be > 0 && p.s >= L - 1e-6 ? L + be : bs < 0 && p.s <= 1e-6 ? bs : p.s;
+  const sv = s0 + dir * 1.5, q = pointAt(A, clamp(sv, 0, L)), ex = sv > L ? sv - L : sv < 0 ? sv : 0;
+  if (ex !== 0) { const u = vec(q.brg, ex); q.x += u.x; q.y += u.y; }
   const nb = (q.brg + 90) * (Math.PI / 180), c = CHART, inLane = (u: number, v: number) => l.polys.some((pl) => inPoly(pl, u, v));
   // point acceptable : dans la voie, ou dans une zone de prudence, mais jamais dans une zone de séparation ni côtière
   const okAt = (u: number, v: number) => !c.zones.some((z) => inPoly(z.poly, u, v)) && !c.itz.some((z) => inPoly(z.poly, u, v))
