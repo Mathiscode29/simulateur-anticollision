@@ -7,6 +7,9 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.6 — 23 novembre 2026
+- Vue extérieure : rangées de fenêtres des châteaux 1,5 fois plus espacées (un niveau tous les 4,2 m au lieu de 2,8 m).
+
 ## V1.5 — 23 novembre 2026
 Correction de la vue extérieure, défilement fluide, ports et feux.
 - Correction : la texture de la mer dérivait à la vitesse de phase des vagues (≈ 10 m/s) dans le lit du vent, ce qui donnait l'impression que le navire avançait en travers de son vecteur radar. Elle suit désormais l'eau (courant et légère dérive due au vent).

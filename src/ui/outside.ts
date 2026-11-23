@@ -440,8 +440,8 @@ function buildModel(t: Target, key: string): Model {
     box(a0 + 0.15 * da, a1, hb, zTop - 2.6, zTop, C_WHITE);
     box(a1 - Math.min(2.5, 0.2 * da), a1, B / 2, zTop - 2.4, zTop - 1.4, C_WHITE); // ailerons
     win(a0 + 0.15 * da, a1, hb, zTop - 2.1, zTop - 0.9, 'fs');
-    for (let z = fb + 1.2; z < zTop - 3.6; z += 2.8) win(a0 + 0.12 * da, a1 - 0.1 * da, hb, z, z + 1, 's');
-    for (let z = fb + 1.2; z < zTop - 3.6; z += 2.8) win(a0, a1, hb * 0.6, z, z + 1, 'f');
+    for (let z = fb + 1.2; z < zTop - 3.6; z += 4.2) win(a0 + 0.12 * da, a1 - 0.1 * da, hb, z, z + 1, 's');
+    for (let z = fb + 1.2; z < zTop - 3.6; z += 4.2) win(a0, a1, hb * 0.6, z, z + 1, 'f');
     const fh = 0.035 * L + 3, fa0 = a0 + 0.02 * da, fa1 = a0 + 0.02 * da + Math.max(1.5, 0.3 * da), fc = FUNC[id % FUNC.length];
     box(fa0, fa1, Math.max(0.8, B / 8), zTop - 1, zTop + fh * 0.82, fc, true);
     box(fa0, fa1, Math.max(0.8, B / 8), zTop + fh * 0.82, zTop + fh, C_DARK);
