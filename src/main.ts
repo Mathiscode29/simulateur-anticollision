@@ -5,6 +5,7 @@ import { simStep, DT } from './sim/loop';
 import { initRender, draw } from './ui/render';
 import { initEcdis, drawEcdis } from './ui/ecdis';
 import { initOutside, drawOutside } from './ui/outside';
+import { initDebrief, drawDebrief } from './ui/debrief';
 import { currentView, initControls, upd } from './ui/controls';
 
 const canvas = document.getElementById('radar') as HTMLCanvasElement;
@@ -14,6 +15,7 @@ newScenario();
 initRender(canvas);
 initEcdis(ecdis);
 initOutside(document.getElementById('outside') as HTMLCanvasElement);
+initDebrief(document.getElementById('debrief') as HTMLCanvasElement);
 upd();
 setInterval(upd, 250);
 
@@ -31,6 +33,7 @@ function frame(now: number): void {
   if (v === 'radar' || v === 'split' || v === 'bridge') draw();
   if (v === 'ecdis' || v === 'split' || v === 'bridge') drawEcdis();
   if (v === 'visual' || v === 'bridge') drawOutside();
+  if (v === 'debrief') drawDebrief();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

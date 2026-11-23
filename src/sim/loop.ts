@@ -9,6 +9,7 @@ import { faultStep } from './faults';
 import { encStep, checkCol, finish } from './assessment';
 import { aisStep } from './ais';
 import { navStep } from './nav';
+import { recStep } from './debrief';
 
 export const DT = 0.25;
 
@@ -33,7 +34,7 @@ export function simStep(dt = DT): void {
   if (S.aiAcc >= 2) { S.aiAcc = 0; faultStep(2); for (const t of S.targets) aiStep(t); }
   S.encAcc += dt;
   if (S.encAcc >= 1) {
-    S.encAcc = 0; encStep(); checkCol(); navStep(1);
+    S.encAcc = 0; encStep(); checkCol(); navStep(1); recStep(1);
     if (S.grounded) { finish(); return; }
   }
   S.histAcc += dt;

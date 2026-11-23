@@ -14,6 +14,7 @@ import { pickBeh, roleOf } from './rules';
 import { makeRoute } from './route';
 import { depthAt, laneOf, loadChart, pointAt, polyLength, projOnPolyline, tssAt, type ChartKey } from './chart';
 import { makeAis } from './ais';
+import { newRecording } from './debrief';
 import { toXY } from '../core/geo';
 
 export type Kind = 'headon' | 'gw' | 'so' | 'overtake' | 'overtaken' | 'fish' | 'nuc' | 'sail' | 'any';
@@ -316,6 +317,7 @@ export function newScenario(): void {
     chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [],
   });
   Object.assign(S.ecdis, { ebl: null, vrm: null, routeIssues: [] });
+  S.rec = newRecording();
   Object.assign(S.radar, {
     cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), trial: false, trialT0: 0, tmC: { x: x0, y: y0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
     ebl: [null, null], vrm: [null, null], pi: [null, null, null, null],

@@ -11,6 +11,7 @@ import { roleOf } from './rules';
 import { currentXte } from './route';
 import { tssReport } from './nav';
 import { depthAt } from './chart';
+import { recClose } from './debrief';
 
 export function tLabel(t: Target): string {
   const tr = S.tracks.find((k) => k.tid === t.id);
@@ -142,6 +143,7 @@ export function checkCol(): void {
 export function finish(): void {
   if (S.over) return;
   S.over = true; S.paused = true;
+  recClose();
   let pen = 0, unfinished = 0;
   const items: Report['items'] = [], global: Msg[] = [];
   for (const t of S.targets) {
@@ -152,7 +154,7 @@ export function finish(): void {
     pen += res.pen;
     const info = (t.ai.done || '') + (t.ai.state === 'avoid' ? t.ai.info || '' : '');
     items.push({
-      label: tLabel(t), name: t.name, L: t.L, role: ROLE_TXT[e.role] || e.role, msgs: res.m,
+      tid: t.id, label: tLabel(t), name: t.name, L: t.L, role: ROLE_TXT[e.role] || e.role, msgs: res.m,
       other: info ? info.replace(/ ; $/, '') : t.type === 'nuc' ? 'non maître de sa manœuvre, a dérivé' : 'a maintenu cap et vitesse',
     });
   }

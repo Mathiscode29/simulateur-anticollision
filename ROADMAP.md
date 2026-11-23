@@ -57,7 +57,8 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Ordres à la barre à la voix en anglais SMCP (reconnaissance vocale du navigateur)
 
 ## Phase 4 — Pédagogie
-- [ ] Rejeu chronologique du débrief
+- [x] Rejeu chronologique du débrief : mouvement vrai / relatif, moments clés commentés, graphe des distances et du CPA prévu, arrêt automatique
+- [ ] Export du débrief (PDF) pour l'instructeur
 - [ ] Éditeur de scénarios pour instructeur, partage par lien
 - [ ] Progression de difficulté et banque de scénarios
 - [ ] Validation des scénarios par un professeur d'exploitation de l'ENSM

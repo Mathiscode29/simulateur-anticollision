@@ -12,14 +12,19 @@ import { cursor, geo, resetTM } from './render';
 import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
 import { checkRoute, depthAt, tssAt } from '../sim/chart';
 import { look, lookBy } from './outside';
+import { RP, currentKey, openDebrief, seek, situationRows, stepKey, togglePlay } from './debrief';
+import { fmtT } from '../sim/debrief';
 import { fmtLat, fmtLon, toLL } from '../core/geo';
 import { aisAssociated } from '../sim/ais';
 
 /** Vue affichée : la simulation tourne quelle que soit la vue. */
-export type View = 'radar' | 'ecdis' | 'split' | 'visual' | 'bridge';
-const VIEWS: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge'];
+export type View = 'radar' | 'ecdis' | 'split' | 'visual' | 'bridge' | 'debrief';
+const VIEWS: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge', 'debrief'];
+/** Vues parcourues par la touche V (le débrief s'ouvre depuis le bilan). */
+const CYCLE: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge'];
 export let currentView: View = 'radar';
 function setView(v: View): void {
+  if (v === 'debrief' && !RP.d && !(S.over && openDebrief())) { logE('Débrief : terminez d\'abord l\'exercice (onglet Bilan).', 'warn'); showTab('bilan'); return; }
   currentView = v;
   document.body.classList.remove(...VIEWS.map((x) => 'view-' + x));
   document.body.classList.add('view-' + v);
@@ -97,6 +102,9 @@ const SEGS: Record<string, Seg> = {
   ecLook: { g: () => String(S.ecdis.look), s: (v) => (S.ecdis.look = +v) },
   ecTool: { g: () => S.ecdis.tool, s: (v) => (S.ecdis.tool = v as typeof S.ecdis.tool) },
   aisRadar: { g: () => (S.ecdis.aisRadar ? '1' : '0'), s: (v) => (S.ecdis.aisRadar = v === '1') },
+  dbSpeed: { g: () => String(RP.speed), s: (v) => (RP.speed = +v) },
+  dbMode: { g: () => RP.mode, s: (v) => { RP.mode = v as typeof RP.mode; RP.view.fit = true; } },
+  dbAuto: { g: () => (RP.autoPause ? '1' : '0'), s: (v) => (RP.autoPause = v === '1') },
 };
 
 function routeCheck(): void {
@@ -197,7 +205,15 @@ const ACT: Record<string, (v: string) => void> = {
     e.curSet = Math.round(Math.random() * 35) * 10; e.curKn = Math.round(Math.random() * 25) / 10;
     syncEnv();
   },
-  newRun() { newScenario(); S.started = true; S.paused = false; showTab('barre'); },
+  newRun() {
+    newScenario(); S.started = true; S.paused = false; showTab('barre');
+    RP.d = null; RP.playing = false; dbKeysFor = null;
+    if (currentView === 'debrief') setView('radar');
+  },
+  debrief() { if (S.over && openDebrief()) { dbKeysFor = null; setView('debrief'); } },
+  dbPlay() { togglePlay(); },
+  dbPrev() { stepKey(-1); },
+  dbNext() { stepKey(1); },
   finish() { if (!S.over && S.started) finish(); },
   ackAll() { ackAll(); },
   silence() { S.silencedUntil = performance.now() + 30000; },
@@ -248,10 +264,11 @@ function renderReport(): void {
   let h = `<div class="card"><div class="score" style="color:${col}">${Rp.score}/100</div><div>${esc(Rp.grade)} · ${esc(Rp.scen)} · durée ${fT(Rp.duration)}</div>${msgs(Rp.global)}</div>`;
   if (!Rp.items.length) h += "<p class=\"dim\">Aucune situation de risque ne s'est établie (CPA toujours > 1 NM).</p>";
   for (const it of Rp.items) {
-    h += `<div class="card"><b>${esc(it.label)}</b> <span class="dim">· ${esc(it.name)} ${it.L} m</span><div style="color:var(--ac);font-size:12px;margin:3px 0">${esc(it.role)}</div>${msgs(it.msgs)}<div class="msg info">L'autre navire : ${esc(it.other)}.</div></div>`;
+    h += `<div class="card"${it.tid !== undefined ? ` data-tid="${it.tid}" title="Cliquer pour revoir cette situation"` : ''}><b>${esc(it.label)}</b> <span class="dim">· ${esc(it.name)} ${it.L} m</span><div style="color:var(--ac);font-size:12px;margin:3px 0">${esc(it.role)}</div>${msgs(it.msgs)}<div class="msg info">L'autre navire : ${esc(it.other)}.</div></div>`;
   }
   $('report').innerHTML = h;
   showTab('bilan');
+  upd();
 }
 
 let lastAlertsHTML = '';
@@ -275,7 +292,32 @@ function soundTick(): void {
   for (const a of S.alerts) if (a.cat === 'warning' && !a.acked && !seenWarn.has(a.id)) { seenWarn.add(a.id); beep(660, 0.25); }
 }
 
+let dbKeysFor: unknown = null;
+/** Panneau du débrief : commandes, situation au curseur, moments clés, chronologie. */
+function updDebrief(): void {
+  const btn = $('dbOpen') as HTMLButtonElement;
+  btn.disabled = !S.over || !S.rec;
+  const d = RP.d;
+  $('dbCtl').hidden = !d;
+  if (!d) return;
+  $('dbPlayBtn').textContent = RP.playing ? '⏸' : '▶';
+  $('dbTime').textContent = `${fmtT(RP.t)} / ${fmtT(d.t1)}`;
+  const sl = $in('dbSlider');
+  if (document.activeElement !== sl) sl.value = String(Math.round(((RP.t - d.t0) / Math.max(1, d.t1 - d.t0)) * 1000));
+  const rows = situationRows();
+  const sit = rows.length ? `<table class="t"><tr><th>Navire</th><th>Rlv</th><th>Dist</th><th>CPA</th><th>TCPA</th></tr>${rows.map((r) => `<tr data-tid="${r.id}" style="cursor:pointer${RP.focus === r.id ? ';background:rgba(90,169,230,.18)' : ''}"><td style="color:${r.col}">${esc(r.name)}</td><td>${p3(r.brg)}°</td><td>${r.r.toFixed(1)}</td><td class="${r.cpa < S.radar.cpaLim && r.tcpa > 0 ? 'dg' : ''}">${r.cpa.toFixed(2)}</td><td>${r.tcpa > 0 ? (r.tcpa / 60).toFixed(1) : '—'}</td></tr>${r.role ? `<tr><td colspan="5" class="dim" style="font-size:11px;padding-top:0">${esc(r.role)}</td></tr>` : ''}`).join('')}</table>` : '<p class="dim">Aucun navire à moins de 12 NM.</p>';
+  if ($('dbSit').innerHTML !== sit) $('dbSit').innerHTML = sit;
+  if (dbKeysFor !== d) {
+    dbKeysFor = d;
+    $('dbKeys').innerHTML = d.keys.map((k, i) => `<div class="k ${k.lvl}" data-i="${i}" data-t="${k.t}"${k.tid !== undefined ? ` data-tid="${k.tid}"` : ''}><span class="tm">${fmtT(k.t)}</span><span>${esc(k.text)}</span></div>`).join('') || '<p class="dim">Aucun moment clé.</p>';
+    $('dbAll').innerHTML = d.ev.map((e) => `<div class="msg ${e.lvl}"><span class="tm">${fmtT(e.t)}</span> ${esc(e.text)}</div>`).join('');
+  }
+  const ci = currentKey();
+  document.querySelectorAll<HTMLElement>('#dbKeys .k').forEach((el) => el.classList.toggle('cur', +el.dataset.i! === ci));
+}
+
 export function upd(): void {
+  updDebrief();
   document.querySelector('.vbar [data-act=binoc]')?.classList.toggle('on', look.binoc);
   document.querySelector('.vbar [data-act=lookAft]')?.classList.toggle('on', look.aft);
   const o = S.own, Rs = S.radar, e = S.env;
@@ -426,6 +468,33 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     const tr = (ev.target as HTMLElement).closest('tr[data-n]') as HTMLElement | null;
     if (tr) { S.sel = +tr.dataset.n!; upd(); }
   });
+  // débrief : moments clés, situation, cartes du bilan, curseur de temps
+  const focusAt = (tid: number | undefined, t?: number) => {
+    if (!RP.d) { if (!(S.over && openDebrief())) return; dbKeysFor = null; }
+    if (tid !== undefined) RP.focus = tid;
+    if (t !== undefined) { RP.playing = false; seek(t); }
+    if (currentView !== 'debrief') setView('debrief');
+    upd();
+  };
+  $('dbKeys').addEventListener('pointerdown', (ev) => {
+    const k = (ev.target as HTMLElement).closest('.k') as HTMLElement | null;
+    if (k) focusAt(k.dataset.tid !== undefined ? +k.dataset.tid : undefined, +k.dataset.t!);
+  });
+  $('dbSit').addEventListener('pointerdown', (ev) => {
+    const r = (ev.target as HTMLElement).closest('tr[data-tid]') as HTMLElement | null;
+    if (r) { RP.focus = +r.dataset.tid!; upd(); }
+  });
+  $('report').addEventListener('pointerdown', (ev) => {
+    const c = (ev.target as HTMLElement).closest('.card[data-tid]') as HTMLElement | null;
+    if (!c) return;
+    const tid = +c.dataset.tid!, e = S.enc[tid];
+    focusAt(tid, e ? e.t0 : undefined);
+  });
+  $in('dbSlider').addEventListener('input', (ev) => {
+    const d = RP.d;
+    if (!d) return;
+    RP.playing = false; seek(d.t0 + (+(ev.target as HTMLInputElement).value / 1000) * (d.t1 - d.t0));
+  });
   $('alerts').addEventListener('pointerdown', (ev) => {
     const b = (ev.target as HTMLElement).closest('button[data-ack]') as HTMLElement | null;
     if (b) { ackAlert(b.dataset.ack!); upd(); }
@@ -478,6 +547,14 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     ensureAudio();
     const k = ev.key;
     let done = true;
+    if (currentView === 'debrief' && RP.d && [' ', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(k)) {
+      if (k === ' ') togglePlay();
+      else if (k === 'ArrowLeft') { if (ev.shiftKey) seek(RP.t - 30); else stepKey(-1); }
+      else if (k === 'ArrowRight') { if (ev.shiftKey) seek(RP.t + 30); else stepKey(1); }
+      else if (k === 'Home') seek(RP.d.t0);
+      else seek(RP.d.t1);
+      ev.preventDefault(); upd(); return;
+    }
     if (k === ' ') ACT.play('');
     else if (k === 'ArrowLeft') stepHdg(ev.shiftKey ? -10 : -1);
     else if (k === 'ArrowRight') stepHdg(ev.shiftKey ? 10 : 1);
@@ -494,7 +571,7 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     else if (k === 'n' || k === 'N') { const seq: RadarSettings['orient'][] = R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU']; setOrient(seq[(seq.indexOf(R().orient) + 1) % seq.length]); }
     else if (k === 't' || k === 'T') setTrial(!R().trial);
     else if (k === 'Enter') ackAll();
-    else if (k === 'v' || k === 'V') setView(VIEWS[(VIEWS.indexOf(currentView) + 1) % VIEWS.length]);
+    else if (k === 'v' || k === 'V') setView(CYCLE[(Math.max(0, CYCLE.indexOf(currentView)) + 1) % CYCLE.length]);
     else if (k === 'q' || k === 'Q') lookBy(ev.shiftKey ? -2 : -10);
     else if (k === 'd' || k === 'D') lookBy(ev.shiftKey ? 2 : 10);
     else if (k === 'z' || k === 'Z') { look.rel = 0; look.aft = false; }

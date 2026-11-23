@@ -15,7 +15,7 @@
   <button id="play" data-act="play" title="Lecture / pause (Espace)">▶</button>
   <div class="seg" data-seg="ts" title="Accélération du temps"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
   <span class="sp"></span>
-  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button><button data-v="visual">Visuel</button><button data-v="bridge" title="Triangle du chef de quart : visuel en haut, radar en bas à gauche, ECDIS en bas à droite">Passerelle</button></div>
+  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button><button data-v="visual">Visuel</button><button data-v="bridge" title="Triangle du chef de quart : visuel en haut, radar en bas à gauche, ECDIS en bas à droite">Passerelle</button><button data-v="debrief" title="Rejeu de l'exercice terminé">Débrief</button></div>
   <div class="seg" data-seg="palette" title="Palette d'affichage"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div>
   <span class="stcw" title="Outil d'entraînement complémentaire, non agréé au titre de la convention STCW">Non agréé STCW</span>
 </header>
@@ -26,6 +26,7 @@
   </div>
   <div id="radarWrap"><canvas id="radar"></canvas></div>
   <div id="ecdisWrap"><canvas id="ecdis"></canvas></div>
+  <div id="debriefWrap"><canvas id="debrief"></canvas></div>
 </div>
 <div id="panel">
   <section class="blk" id="own">
@@ -181,6 +182,22 @@
 
   <section class="tab" id="t-bilan">
     <div class="row"><button class="red" data-act="finish">Terminer et évaluer</button><button data-act="newRun">Rejouer un scénario</button></div>
+    <div id="dbBox">
+      <button class="big" data-act="debrief" id="dbOpen" disabled>▶ Revoir l'exercice (débrief)</button>
+      <div id="dbCtl" hidden>
+        <div class="row"><button data-act="dbPrev" title="Moment clé précédent (←)">⏮</button><button data-act="dbPlay" id="dbPlayBtn" title="Lecture / pause (Espace)">▶</button><button data-act="dbNext" title="Moment clé suivant (→)">⏭</button>
+          <input type="range" id="dbSlider" min="0" max="1000" value="0"><b id="dbTime" class="mono">T+00:00</b></div>
+        <div class="row"><span class="lbl">Vitesse</span><div class="seg" data-seg="dbSpeed"><button data-v="10">×10</button><button data-v="30">×30</button><button data-v="60">×60</button><button data-v="120">×120</button></div></div>
+        <div class="row"><span class="lbl">Tracé</span><div class="seg" data-seg="dbMode"><button data-v="TRUE" title="Routes fond sur la carte">Mouvement vrai</button><button data-v="REL" title="Centré sur le porteur : une route relative qui passe par le centre = relèvement constant">Mouvement relatif</button></div></div>
+        <div class="row"><span class="lbl">Arrêt automatique</span><div class="seg" data-seg="dbAuto"><button data-v="1">Aux moments clés</button><button data-v="0">Jamais</button></div></div>
+        <h4>Situation au curseur (vérité terrain)</h4>
+        <div id="dbSit"></div>
+        <h4>Moments clés</h4>
+        <div id="dbKeys"></div>
+        <details><summary>Chronologie complète (ordres, alertes, journal)</summary><div id="dbAll"></div></details>
+        <p class="dim small">Les jalons « fenêtre de manœuvre » (TCPA 12 min) et « tardive » (TCPA 5 min, 6 min en brume) sont des repères de bonne pratique alignés sur l'évaluation : le RIPAM ne fixe pas de valeurs chiffrées. Cliquez sur un navire du tracé ou sur une situation du bilan pour la suivre ; molette et glisser pour zoomer, double-clic pour recadrer.</p>
+      </div>
+    </div>
     <div id="report"><p class="dim">Le bilan s'affiche à la fin de l'exercice (ou en cas d'abordage). Les situations sont évaluées une fois dégagées.</p></div>
     <h4>Journal de passerelle</h4>
     <div id="log"></div>

@@ -110,7 +110,22 @@ export interface EcdisSettings {
 /** Échos de côte : distance d'entrée (r0) et de sortie (r1) par rayon de 0,5°, instant du dernier éclairement. */
 export interface CoastRadar { ox: number; oy: number; r0: Float32Array; r1: Float32Array; t: Float32Array; band: Float32Array }
 
-export interface ReportItem { label: string; name: string; L: number; role: string; msgs: Msg[]; other: string }
+export interface ReportItem { tid?: number; label: string; name: string; L: number; role: string; msgs: Msg[]; other: string }
+
+/** Enregistrement de l'exercice pour le débrief (voir sim/debrief.ts). */
+export interface RecShip { id: number; x: number; y: number; hdg: number; stw: number; vx: number; vy: number; type: TargetType }
+export interface RecOwn { x: number; y: number; hdg: number; stw: number; vx: number; vy: number; rud: number; tele: number }
+export interface RecFrame { t: number; o: RecOwn; s: RecShip[] }
+export type EvKind = 'helm' | 'engine' | 'alert' | 'log' | 'key';
+export interface RecEvent { t: number; kind: EvKind; text: string; lvl: MsgLevel; tid?: number }
+export interface Recording {
+  frames: RecFrame[]; ev: RecEvent[];
+  ships: Record<number, { vname: string; name: string; L: number }>;
+  // état de l'enregistreur
+  acc: number; cmd: number; cmdT: number; cmdLast: number; tele: number; rud: number; rudT: number; rudLast: number;
+  seenAlerts: Set<string>; lastLog: unknown;
+}
+
 export interface Report { score: number; grade: string; scen: string; duration: number; global: Msg[]; items: ReportItem[]; collided: boolean; grounded?: boolean }
 
 export interface RadarSettings {
@@ -175,6 +190,7 @@ export interface State {
   grounded: boolean;
   /** Alertes de condition de navigation (ECDIS, DST) recalculées chaque seconde. */
   navAlerts: { id: string; cat: AlertCat; text: string }[];
+  rec: Recording | null;
 }
 
 export function newTssWatch(): TssWatch {
@@ -199,7 +215,7 @@ export const S: State = {
     cpaLim: 1, tcpaLim: 12, zone: 0, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0, trialT0: 0, palette: 'DUSK',
   },
   alerts: [], rainCells: [], silencedUntil: 0, route: null,
-  chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [],
+  chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], rec: null,
   ecdis: {
     safety: 30, look: 6, ebl: null, vrm: null, tool: 'INFO',
     layers: { tss: true, depth: true, names: true, ais: true, arpa: true }, aisRadar: true, routeIssues: [],
