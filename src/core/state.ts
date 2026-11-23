@@ -23,6 +23,8 @@ export interface OwnShip {
   tele: number; ap: boolean; manRud: number; rudLim: number; ship: ShipModel; type: 'power'; L: number; vx: number; vy: number;
   /** Modèle MMG : vitesses surface dans le repère navire (m/s, rad/s), régime hélice (tr/s), fin de l'attente de renversement (s). */
   u: number; v: number; r: number; n: number; revUntil: number;
+  /** Angle de barre ordonné (°, + = tribord) : pilote automatique ou barre manuelle ; o.rud suit à 2,5 °/s. */
+  rudCmd?: number;
 }
 
 /** Écho radar tel que peint au dernier passage du faisceau : position géographique (NM), relèvement et distance depuis le porteur. */

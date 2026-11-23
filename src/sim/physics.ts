@@ -61,6 +61,7 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
     rc = clamp(1.2 * e - 1.6 * tL * o.rot, -o.rudLim, o.rudLim);
   } else rc = o.manRud;
   const rr = 2.5 * dt;
+  o.rudCmd = rc;
   o.rud += clamp(rc - o.rud, -rr, rr);
   // machine
   const nT = f * ns;

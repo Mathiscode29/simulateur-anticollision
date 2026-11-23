@@ -7,6 +7,7 @@ import { initEcdis, drawEcdis } from './ui/ecdis';
 import { initOutside, drawOutside } from './ui/outside';
 import { initDebrief, drawDebrief } from './ui/debrief';
 import { currentView, initControls, upd } from './ui/controls';
+import { initRudder, drawRudder } from './ui/rudder';
 
 const canvas = document.getElementById('radar') as HTMLCanvasElement;
 const ecdis = document.getElementById('ecdis') as HTMLCanvasElement;
@@ -16,6 +17,7 @@ initRender(canvas);
 initEcdis(ecdis);
 initOutside(document.getElementById('outside') as HTMLCanvasElement);
 initDebrief(document.getElementById('debrief') as HTMLCanvasElement);
+initRudder(document.getElementById('rudInd') as HTMLCanvasElement);
 upd();
 setInterval(upd, 250);
 
@@ -36,6 +38,7 @@ function frame(now: number): void {
   if (v === 'ecdis' || v === 'split' || v === 'bridge') drawEcdis();
   if (v === 'visual' || v === 'bridge') drawOutside();
   if (v === 'debrief') drawDebrief();
+  drawRudder();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

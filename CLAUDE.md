@@ -32,6 +32,7 @@ src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
             outside.ts (vue extérieure canvas 2D en perspective : regard ± 90°, jumelles, horizon, brume, nuit, côte, cibles et feux,
             état de la mer, roulis / tangage, bouées, console d'instruments),
+            rudder.ts (indicateur d'angle de barre de l'onglet Barre : angle réel et ordonné),
             controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
