@@ -30,7 +30,8 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
             ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD),
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
-            outside.ts (vue extérieure canvas 2D en perspective : regard ± 90°, jumelles, horizon, brume, nuit, côte, cibles et feux),
+            outside.ts (vue extérieure canvas 2D en perspective : regard ± 90°, jumelles, horizon, brume, nuit, côte, cibles et feux,
+            état de la mer, roulis / tangage, bouées, console d'instruments),
             controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),

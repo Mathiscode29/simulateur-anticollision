@@ -221,6 +221,7 @@ const ACT: Record<string, (v: string) => void> = {
   lookFwd() { look.rel = 0; look.aft = false; },
   lookAft() { look.aft = !look.aft; look.rel = 0; },
   binoc() { look.binoc = !look.binoc; },
+  inst() { look.inst = !look.inst; },
   ecZoom(v) { ecZoom(+v); },
   ecCenter() { centreOnOwn(); },
   ecClr() { S.ecdis.ebl = null; S.ecdis.vrm = null; },
@@ -320,6 +321,7 @@ export function upd(): void {
   updDebrief();
   document.querySelector('.vbar [data-act=binoc]')?.classList.toggle('on', look.binoc);
   document.querySelector('.vbar [data-act=lookAft]')?.classList.toggle('on', look.aft);
+  document.querySelector('.vbar [data-act=inst]')?.classList.toggle('on', look.inst);
   const o = S.own, Rs = S.radar, e = S.env;
   $('clock').textContent = 'T+' + fT(S.t);
   $('play').textContent = S.paused ? '▶' : '⏸';
@@ -577,6 +579,7 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     else if (k === 'z' || k === 'Z') { look.rel = 0; look.aft = false; }
     else if (k === 'x' || k === 'X') { look.aft = !look.aft; look.rel = 0; }
     else if (k === 'b' || k === 'B') look.binoc = !look.binoc;
+    else if (k === 'i' || k === 'I') look.inst = !look.inst;
     else if (k === 'c' || k === 'C') centreOnOwn();
     else done = false;
     if (done) { ev.preventDefault(); upd(); }

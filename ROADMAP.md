@@ -69,7 +69,8 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Vue extérieure liée à la simulation (canvas 2D en perspective, sans bibliothèque 3D) : regard sur 180°, jumelles 7×, horizon et rotondité, brume, nuit, côte, bouées
 - [x] Feux de navigation selon les secteurs de l'annexe I et marques de jour, jour / nuit / brume
 - [x] Disposition « Passerelle » : triangle du chef de quart (visuel en haut, radar en bas à gauche, ECDIS en bas à droite)
-- [ ] Mouvements de plate-forme (roulis, tangage) et état de la mer selon le vent
+- [x] Mouvements de plate-forme (roulis, tangage) et état de la mer selon le vent (Beaufort, moutons)
+- [x] Console d'instruments dans la vue extérieure, reflets des feux, éclairage de pont, bouées détaillées
 - [ ] Signaux sonores (brume, R34) audibles et relevés au visuel
 
 ## Garde-fous permanents

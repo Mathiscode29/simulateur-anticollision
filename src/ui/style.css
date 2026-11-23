@@ -31,7 +31,7 @@ body.view-ecdis #radarWrap { display: none }
 #visualWrap { position: relative; width: 100vw; height: 40vh; height: 40dvh; display: none; background: #000 }
 #outside { cursor: ew-resize }
 #radarWrap > canvas, #ecdisWrap > canvas, #visualWrap > canvas { position: absolute; inset: 0 }
-.vbar { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
+.vbar { position: absolute; right: 8px; top: 44px; display: flex; gap: 4px }
 .vbar button { background: rgba(10,16,22,.72); color: #dfe9f0; border: 1px solid rgba(200,220,235,.3); border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer }
 .vbar button.on { background: #1f6f9a; border-color: #5fb6e0 }
 body.view-visual #radarWrap { display: none }
