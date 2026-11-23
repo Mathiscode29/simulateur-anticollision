@@ -30,15 +30,16 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
             ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD),
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
-            outside.ts (vue extérieure : caméra, regard ± 90°, jumelles, cadre de passerelle, bandeau, console d'instruments ; rendu 2D de secours),
-            outside3d.ts (rendu WebGL three.js de la vue extérieure : mer, ciel, relief côtier, navires par type, bouées, phares, feux),
+            outside.ts (vue extérieure 2D par défaut : caméra, regard ± 90°, jumelles, silhouettes en blocs par famille de navire,
+            ciel / mer / relief en paliers, cadre de passerelle, bandeau, console d'instruments ; 30 i/s),
+            outside3d.ts (rendu WebGL three.js expérimental, chargé à la demande par le bouton « 3D »),
             rudder.ts (répétiteurs de l'onglet Barre : angle de barre réel et ordonné, ROT), telegraph.ts (transmetteur d'ordres à échelle −10…+10, manette, réponse machine),
             controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
-            trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D et marques de jour),
+            trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D, marques de jour, familles de silhouettes),
             debrief.test.ts (enregistrement, interpolation, moments clés), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md, carte-gibraltar.md (sources et limites des cartes)
@@ -57,7 +58,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
 - Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'` ou `'gib'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneMeetRoute` (au croisement de la route prévue), `laneAhead`, `laneAt`, `laneFill` (identifiants de voie : NE/SW au Pas-de-Calais, W/E à Gibraltar). Nouvelle carte : un `ChartSource` dans `src/core/charts/` (types communs dans `types.ts`), enregistré dans `SOURCES` de `sim/chart.ts`.
 - Positions : le moteur travaille en plan local (NM) ; toute donnée géographique est saisie en WGS 84 et convertie par `core/geo.ts`. Affichage au format marin (51°02,345'N 001°23,456'E).
-- Les vues (radar, ECDIS, vue extérieure) ne font que lire `S` : changer de vue n'interrompt jamais la simulation. La vue extérieure est rendue en WebGL avec three.js (licence MIT, seule dépendance d'exécution, avis dans `public/THIRD-PARTY-NOTICES.txt`) ; le rendu 2D de `outside.ts` reste en secours (pas de WebGL, ou bouton « 3D » désactivé). `outside.ts` et `outside3d.ts` s'importent mutuellement : rien ne doit utiliser une valeur importée au chargement du module (seulement dans les fonctions).
+- Les vues (radar, ECDIS, vue extérieure) ne font que lire `S` : changer de vue n'interrompt jamais la simulation. La vue extérieure est rendue par défaut en canvas 2D « en blocs » (`outside.ts`) : priorité à la fluidité sur un ordinateur courant, sans viser le photoréalisme. Le rendu WebGL three.js (`outside3d.ts`, licence MIT, avis dans `public/THIRD-PARTY-NOTICES.txt`) est expérimental et chargé par `import()` dynamique seulement si l'utilisateur l'active (bouton « 3D ») : ne jamais l'importer statiquement. `outside3d.ts` importe `outside.ts` : n'y utiliser les valeurs importées que dans les fonctions.
 - Toute modification de `rules.ts` ou `assessment.ts` s'accompagne d'un test dans `tests/`.
 - Les jalons du débrief (TCPA 12 min, seuil tardif 5 min / 6 min en brume, R17a(ii) à TCPA 8 min, R17b) restent alignés sur les seuils de `assessment.ts` ; ils sont présentés comme des repères de bonne pratique, pas comme des valeurs du RIPAM.
 - Les tests qui supposent un trafic sans incident forcent `S.env.faults = 'off'` (les avaries aléatoires sont « rares » par défaut).

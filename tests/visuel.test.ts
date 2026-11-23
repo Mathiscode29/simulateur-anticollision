@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { S } from '../src/core/state';
 import { applyScenarioEnv, mkT, newScenario } from '../src/sim/scenarios';
-import { dayShapes, navLights3D } from '../src/sim/visual';
+import { dayShapes, navLights3D, shipKind } from '../src/sim/visual';
 
 function fresh() {
   S.scen = 'r15'; applyScenarioEnv('r15'); S.env.faults = 'off'; newScenario(); S.targets = [];
@@ -45,5 +45,21 @@ describe('feux de navigation en 3D (annexe I)', () => {
     expect(navLights3D(t, 30)[0].col).toBe('G');
     expect(navLights3D(t, 330)[0].col).toBe('R');
     expect(navLights3D(t, 180)[0].col).toBe('W');
+  });
+});
+
+describe('silhouettes de la vue extérieure', () => {
+  it('famille de silhouette selon le type et la désignation', () => {
+    expect(shipKind({ type: 'power', name: 'Porte-conteneurs' })).toBe('pc');
+    expect(shipKind({ type: 'power', name: 'Pétrolier' })).toBe('tank');
+    expect(shipKind({ type: 'power', name: 'Méthanier' })).toBe('lng');
+    expect(shipKind({ type: 'power', name: 'Transporteur de voitures' })).toBe('roro');
+    expect(shipKind({ type: 'power', name: 'Transbordeur' })).toBe('ferry');
+    expect(shipKind({ type: 'power', name: 'Vraquier' })).toBe('bulk');
+    expect(shipKind({ type: 'small', name: 'Caboteur' })).toBe('coaster');
+    expect(shipKind({ type: 'nuc', name: 'Navire non maître de sa manœuvre' })).toBe('cargo');
+    expect(shipKind({ type: 'fish', name: 'Chalutier en pêche' })).toBe('fish');
+    expect(shipKind({ type: 'sail', name: 'Voilier' })).toBe('sail');
+    expect(shipKind({ type: 'ram', name: 'câblier' })).toBe('ram');
   });
 });

@@ -1,12 +1,14 @@
 /**
- * Vue extérieure depuis la passerelle (canvas 2D, perspective simple, sans bibliothèque 3D).
+ * Vue extérieure depuis la passerelle (canvas 2D, perspective simple, sans bibliothèque 3D), rendu par défaut.
+ * Style volontairement « en blocs » (arcade) : la fluidité prime sur le photoréalisme.
  *
  * - Œil à 32 m au-dessus de l'eau, à l'arrière (passerelle du VLCC), regard orientable sur 180° (± 90° autour de
  *   l'avant, ou autour de l'arrière en vue « aileron »), jumelles 7× (champ ≈ 7,5°).
  * - Rotondité de la Terre avec réfraction standard (rayon effectif 7/6 R) : horizon à ≈ 11,8 NM, les coques
  *   au-delà sont coupées par l'horizon, les superstructures et les feux restent visibles.
  * - Atmosphère : contraste atténué selon la loi de Koschmieder (visibilité météorologique), brume, nuit.
- * - Cibles : silhouettes simples (coque, château, cheminée, mâts, voiles), feux selon les secteurs de l'annexe I,
+ * - Cibles : silhouettes en blocs par famille (shipKind) avec faces ombrées et fenêtres, silhouette simple au loin ;
+ *   feux selon les secteurs de l'annexe I,
  *   marques de jour ; bouées et bateaux-feux de la carte ; côte à partir des rayons radar (relief schématique,
  *   falaises de Douvres et des caps Blanc-Nez / Gris-Nez), lumières à terre de nuit.
  * - État de la mer selon le vent (échelle de Beaufort) : crêtes qui avancent dans le lit du vent, moutons, embruns,
@@ -20,8 +22,25 @@ import { S, type Target } from '../core/state';
 import { TELE } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
 import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
-import { dayShapes, navLights3D } from '../sim/visual';
-import { init3D, render3D, use3D } from './outside3d';
+import { dayShapes, mastH, navLights3D, shipKind } from '../sim/visual';
+
+/** Rendu WebGL (three.js), chargé seulement à la demande : le rendu 2D en blocs est le rendu par défaut. */
+type R3D = typeof import('./outside3d');
+let r3d: R3D | null = null, r3dLoading = false;
+const use3D = (): boolean => !!r3d && r3d.use3D();
+/** Rendu 3D actif. */
+export const is3D = use3D;
+/** Bascule 2D / 3D ; le module 3D et three.js ne sont téléchargés qu'au premier passage en 3D. */
+export async function toggle3D(): Promise<void> {
+  const on = !use3D();
+  try { localStorage.setItem('rendu3d.v2', on ? '1' : '0'); } catch { /* stockage indisponible */ }
+  if (on && !r3d) {
+    if (r3dLoading) return;
+    r3dLoading = true;
+    try { const m = await import('./outside3d'); if (cv.parentElement && m.init3D(cv.parentElement)) r3d = m; } finally { r3dLoading = false; }
+  }
+  r3d?.set3D(on);
+}
 
 export const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
 export const FOV = 62, FOV_BINO = 7.5;
@@ -49,13 +68,14 @@ export function initOutside(canvas: HTMLCanvasElement): void {
   cv.addEventListener('pointerup', () => { drag = null; });
   cv.addEventListener('pointerleave', () => { hover = null; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); look.binoc = e.deltaY < 0; }, { passive: false });
-  // rendu WebGL sous le calque 2D (cadre, jumelles, bandeau, console) ; repli sur le rendu 2D sans WebGL
-  if (cv.parentElement) init3D(cv.parentElement);
+  // rendu WebGL sous le calque 2D, seulement si l'utilisateur l'a choisi (rendu 2D par défaut, plus léger)
+  try { if (localStorage.getItem('rendu3d.v2') === '1') void toggle3D(); } catch { /* stockage indisponible */ }
 }
 
 function resize(): void {
   const r = cv.getBoundingClientRect();
-  DPR = window.devicePixelRatio || 1;
+  // résolution plafonnée à 1 pixel par point CSS : rendu « arcade » et fluidité avant la finesse
+  DPR = Math.min(1, window.devicePixelRatio || 1);
   W = r.width; H = r.height;
   cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
 }
@@ -68,6 +88,7 @@ type RGB = [number, number, number];
 const hex = (s: string): RGB => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
 const mix = (a: RGB, b: RGB, t: number): string => `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
 const dark = (a: RGB, k: number): RGB => [a[0] * k, a[1] * k, a[2] * k];
+const mixC = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 interface Sky { top: RGB; hor: RGB; seaH: RGB; seaN: RGB; land: RGB; cliff: RGB; vis: number; night: boolean }
 function sky(): Sky {
@@ -140,8 +161,14 @@ const box = (a0: number, a1: number, hb: number, z0: number, z1: number): [numbe
 
 // ---------------------------------------------------------------- dessin
 
+/** Dernier rendu : la vue extérieure est limitée à 30 images par seconde (la simulation, elle, ne dépend pas de l'affichage). */
+let lastDraw = 0;
+
 export function drawOutside(): void {
   if (!W || !H) return;
+  const now = performance.now();
+  if (now - lastDraw < 31) return;
+  lastDraw = now;
   const o = S.own, sk = sky(), hf = fov();
   const rel = look.rel + (look.aft ? 180 : 0), yaw = n360(o.hdg + rel);
   const eyeA = -o.L / 2 + 50; // passerelle à l'arrière
@@ -156,7 +183,7 @@ export function drawOutside(): void {
 
   if (use3D()) {
     ctx.clearRect(0, 0, W, H);
-    render3D({ W, H, yaw, rel, hfov: hf, binoc: look.binoc, aft: look.aft });
+    r3d!.render3D({ W, H, yaw, rel, hfov: hf, binoc: look.binoc, aft: look.aft });
     const bf = beaufort(S.env.windKn);
     if (look.binoc) binocMask3D(); else { bridgeFrame(sk); if (look.inst) instruments(bf); }
     hud(hf, bf);
@@ -167,14 +194,21 @@ export function drawOutside(): void {
   ctx.save();
   ctx.translate(W / 2, cy); ctx.rotate(-tilt); ctx.translate(-W / 2, -cy);
   const bf = beaufort(S.env.windKn), rough = Math.min(1, bf / 8);
-  const seaH = mix(sk.seaH, [150, 160, 160], sk.night ? 0 : rough * 0.25), seaN = mix(sk.seaN, [40, 60, 64], sk.night ? 0 : rough * 0.35);
-  let g = ctx.createLinearGradient(0, yH - H, 0, yH);
-  g.addColorStop(0, mix(sk.top, sk.top, 0)); g.addColorStop(1, mix(sk.hor, sk.hor, 0));
-  ctx.fillStyle = g; ctx.fillRect(-W, yH - 2 * H, 3 * W, 2 * H + 1);
-  g = ctx.createLinearGradient(0, yH, 0, yH + H);
-  g.addColorStop(0, seaH); g.addColorStop(1, seaN);
-  ctx.fillStyle = g; ctx.fillRect(-W, yH, 3 * W, 2 * H);
+  const sH = mixC(sk.seaH, [150, 160, 160], sk.night ? 0 : rough * 0.25), sN = mixC(sk.seaN, [40, 60, 64], sk.night ? 0 : rough * 0.35);
+  // ciel et mer en aplats dégradés par paliers (style arcade, sans dégradé continu)
+  const NB = 7;
+  ctx.fillStyle = mix(sk.top, sk.top, 0); ctx.fillRect(-W, yH - 3 * H, 3 * W, 2 * H);
+  for (let k = 0; k < NB; k++) {
+    const y0 = yH - H * (1 - k / NB) ** 1.4, y1 = yH - H * (1 - (k + 1) / NB) ** 1.4;
+    ctx.fillStyle = mix(sk.top, sk.hor, (k + 0.5) / NB); ctx.fillRect(-W, y0, 3 * W, y1 - y0 + 1);
+  }
+  for (let k = 0; k < NB; k++) {
+    const y0 = yH + 1.3 * H * (k / NB) ** 1.8, y1 = yH + 1.3 * H * ((k + 1) / NB) ** 1.8;
+    ctx.fillStyle = mix(sH, sN, k / (NB - 1)); ctx.fillRect(-W, y0, 3 * W, y1 - y0 + 1);
+  }
+  ctx.fillRect(-W, yH + 1.3 * H, 3 * W, 2 * H);
   if (sk.night && S.env.vis !== 'poor') stars(yH);
+  else if (S.env.vis !== 'poor') clouds(sk, yH);
   drawCoast(sk, hf);
   waves(sk, bf);
   drawMarks(sk, bf);
@@ -195,6 +229,23 @@ function stars(yH: number): void {
     const x = W / 2 + Math.tan(rel * D2R) * cam.F, y = cam.cy - Math.tan(el * D2R) * cam.F;
     if (y < yH - 3) ctx.fillRect(x, y, i % 5 ? 1 : 1.6, i % 5 ? 1 : 1.6);
   }
+}
+
+/** Nuages en blocs, de jour par bonne visibilité : amas de pavés qui dérivent lentement avec le vent. */
+function clouds(sk: Sky, yH: number): void {
+  const hf = fov(), path = new Path2D(), shadow = new Path2D(), drift = S.t * 0.0004 * S.env.windKn;
+  for (let i = 0; i < 24; i++) {
+    const az = n360(i * 163.7 + drift * (1 + (i % 3) * 0.3)), el = 2.5 + ((i * 7.7) % 13), w = 3 + ((i * 5.3) % 8), rel = adiff(az, cam.yaw);
+    if (Math.abs(rel) > hf / 2 + w) continue;
+    const x = W / 2 + Math.tan(rel * D2R) * cam.F, y = cam.cy - Math.tan(el * D2R) * cam.F, pw = w * D2R * cam.F, ph = Math.max(3, pw * 0.2);
+    if (y > yH - 4) continue;
+    path.rect(x - pw / 2, y - ph, pw, ph);
+    path.rect(x - pw * 0.32, y - ph * 1.8, pw * 0.5, ph * 0.9);
+    path.rect(x + pw * 0.02, y - ph * 2.4, pw * 0.28, ph * 0.7);
+    shadow.rect(x - pw / 2, y - ph * 0.3, pw, ph * 0.3);
+  }
+  ctx.fillStyle = mix([250, 251, 252], sk.hor, 0.2); ctx.fill(path);
+  ctx.fillStyle = mix([196, 206, 216], sk.hor, 0.3); ctx.fill(shadow);
 }
 
 /**
@@ -242,14 +293,21 @@ function drawCoast(sk: Sky, hf: number): void {
       if (e > el) { el = e; lh = q; }
     }
     const base = -EYE - (d * d) / (2 * RE);
-    const yT = cam.cy - (el / cr) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
+    // relief en gradins de 15 m (style en blocs) ; légère variation de teinte d'une colonne à l'autre
+    const hq = Math.max(6, Math.ceil((el * d - base) / 15) * 15), yT = cam.cy - ((hq + base) / d / cr) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
     if (yT >= yB) continue;
+    const px1 = (yB - yT) / hq, jit = 0.92 + 0.12 * (Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1);
     const x0 = W / 2 + Math.tan((rel - step / 2) * D2R) * cam.F, x1 = W / 2 + Math.tan((rel + step / 2) * D2R) * cam.F;
     const v = veil(d, sk.vis);
     if (v > 0.985) continue;
-    const base3 = lh.cliff > 0.35 && !sk.night ? sk.cliff : sk.land;
-    ctx.fillStyle = mix(base3, sk.hor, v);
-    ctx.fillRect(x0, yT, x1 - x0 + 0.6, yB - yT);
+    const cliff = lh.cliff > 0.35, base3 = cliff && !sk.night ? sk.cliff : sk.land, wx = x1 - x0 + 0.6;
+    ctx.fillStyle = mix(dark(base3, jit), sk.hor, v);
+    ctx.fillRect(x0, yT, wx, yB - yT);
+    if (!sk.night) {
+      // couche d'herbe au sommet, grève ou pied de falaise au bas
+      ctx.fillStyle = mix(dark(GRASS, jit), sk.hor, v); ctx.fillRect(x0, yT, wx, Math.max(1, (cliff ? 3 : 6) * px1));
+      ctx.fillStyle = mix(cliff ? dark(sk.cliff, 0.8) : SAND, sk.hor, v); ctx.fillRect(x0, yB - Math.max(1, 3 * px1), wx, Math.max(1, 3 * px1));
+    }
     // lumières à terre la nuit
     if (sk.night && S.env.vis !== 'poor' && r0 < 22) {
       const hsh = Math.abs(Math.sin(Math.round(hx * 4) * 12.9898 + Math.round(hy * 4) * 78.233) * 43758.5453) % 1;
@@ -267,43 +325,52 @@ function drawCoast(sk: Sky, hf: number): void {
  * longueur et densité selon le Beaufort, moutons qui apparaissent et disparaissent, ondulations lointaines.
  */
 function waves(sk: Sky, bf: number): void {
-  const cell = 26 + 5 * bf, R = 1500, to = (S.env.windFrom + 180) * D2R, ux = Math.sin(to), uy = Math.cos(to);
+  const cell = 30 + 6 * bf, R = 1500, to = (S.env.windFrom + 180) * D2R, ux = Math.sin(to), uy = Math.cos(to);
   const c = 4 + 1.6 * bf, ox = ux * c * S.t, oy = uy * c * S.t; // dérive du champ de vagues
   const px = cam.ex - ox, py = cam.ey - oy, ci = Math.floor(px / cell), cj = Math.floor(py / cell), n = Math.ceil(R / cell);
   const crest = 4 + 2.2 * bf, kx = Math.cos(to), ky = -Math.sin(to); // direction des crêtes (perpendiculaire au vent)
   const hi = mix(sk.seaH, [255, 255, 255], sk.night ? 0.04 : 0.22), lo = mix(sk.seaN, [0, 0, 0], sk.night ? 0 : 0.25);
-  const capP = CAPS[bf], night = sk.night;
-  ctx.lineCap = 'round';
+  const capP = CAPS[bf], night = sk.night, hf = fov() / 2 + 4;
+  // tracés groupés par classe de distance (trois remplissages par couleur au lieu d'un trait par vague)
+  const HI = [new Path2D(), new Path2D(), new Path2D()], LO = [new Path2D(), new Path2D(), new Path2D()], FO = [new Path2D(), new Path2D(), new Path2D()];
   for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
     const I = ci + i, J = cj + j, h1 = Math.abs(Math.sin(I * 127.1 + J * 311.7) * 43758.5453) % 1, h2 = Math.abs(Math.sin(I * 269.5 + J * 183.3) * 24634.6345) % 1;
     const wx = I * cell + h1 * cell + ox - cam.ex, wy = J * cell + h2 * cell + oy - cam.ey;
+    const f = wx * cam.sy + wy * cam.cyw;
+    if (f < 90 || f > R || Math.abs(Math.atan2(wx * cam.cyw - wy * cam.sy, f)) > hf * D2R) continue;
     const q = proj(wx, wy, 0);
-    if (!q || q[2] > R || q[2] < 90 || q[0] < -60 || q[0] > W + 60) continue;
-    const a = clamp(1 - q[2] / R, 0, 1) ** 1.3 * clamp((q[2] - 90) / 150, 0, 1), L2 = crest * (0.6 + h1) / 2;
-    const p1 = proj(wx - kx * L2, wy - ky * L2, 0), p2 = proj(wx + kx * L2, wy + ky * L2, 0);
+    if (!q) continue;
+    const L2 = crest * (0.6 + h1) / 2, p1 = proj(wx - kx * L2, wy - ky * L2, 0), p2 = proj(wx + kx * L2, wy + ky * L2, 0);
     if (!p1 || !p2) continue;
-    const th = clamp(((0.18 + 0.07 * bf) / q[2]) * cam.F, 0.6, 3);
-    if (bf >= 3) { ctx.globalAlpha = a * 0.5; ctx.strokeStyle = lo; ctx.lineWidth = th; ctx.beginPath(); ctx.moveTo(p1[0], p1[1] + th); ctx.lineTo(p2[0], p2[1] + th); ctx.stroke(); }
-    ctx.globalAlpha = a * 0.6; ctx.strokeStyle = hi; ctx.lineWidth = th * 0.8; ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-    // moutons : écume qui naît et se résorbe
+    const cls = q[2] < 240 || q[2] > 950 ? 2 : q[2] < 520 ? 0 : 1;
+    const th = clamp(((0.18 + 0.07 * bf) / q[2]) * cam.F, 0.8, 3), x0 = Math.min(p1[0], p2[0]), w = Math.max(1, Math.abs(p2[0] - p1[0])), y = (p1[1] + p2[1]) / 2;
+    HI[cls].rect(x0, y - th * 0.4, w, th * 0.8);
+    if (bf >= 3) LO[cls].rect(x0, y + th * 0.5, w, th);
+    // moutons : écume en pavés qui naît et se résorbe
     if (h1 * h2 < capP) {
       const life = Math.sin(S.t * 0.55 + h1 * 60);
       if (life > 0.2) {
-        const r = clamp((((0.8 + 0.35 * bf) * (life - 0.2)) / q[2]) * cam.F, 0.6, 9);
-        ctx.globalAlpha = a * (night ? 0.25 : 0.9) * (life - 0.2) * 1.25; ctx.fillStyle = night ? '#8c969c' : '#f4f7f8';
-        ctx.beginPath(); ctx.ellipse(q[0], q[1], r * 1.6, r * 0.35, 0, 0, 7); ctx.fill();
-        if (bf >= 7) { ctx.globalAlpha *= 0.4; ctx.fillRect(q[0] - r * 4, q[1] + r * 0.3, r * 8, Math.max(0.6, r * 0.12)); } // traînées d'écume
+        const r = clamp((((0.8 + 0.35 * bf) * (life - 0.2)) / q[2]) * cam.F, 0.8, 9);
+        FO[cls].rect(q[0] - r * 1.6, q[1] - r * 0.4, r * 3.2, Math.max(1, r * 0.7));
+        if (bf >= 7) FO[cls].rect(q[0] - r * 4, q[1] + r * 0.3, r * 8, Math.max(0.8, r * 0.15)); // traînées d'écume
       }
     }
   }
+  const A = [0.8, 0.5, 0.25];
+  for (let k = 0; k < 3; k++) {
+    ctx.globalAlpha = A[k] * 0.5; ctx.fillStyle = lo; ctx.fill(LO[k]);
+    ctx.globalAlpha = A[k] * 0.65; ctx.fillStyle = hi; ctx.fill(HI[k]);
+    ctx.globalAlpha = A[k] * (night ? 0.25 : 0.95); ctx.fillStyle = night ? '#8c969c' : '#f4f7f8'; ctx.fill(FO[k]);
+  }
   // ondulations lointaines vers l'horizon
-  ctx.globalAlpha = night ? 0.06 : 0.12 + 0.02 * bf; ctx.strokeStyle = hi; ctx.lineWidth = 1;
+  const far = new Path2D();
   for (let k = 0; k < 70; k++) {
     const h = Math.abs(Math.sin(k * 91.7 + Math.floor(S.t / 3) * 0.37) * 9137.1) % 1, dist = 1500 + h * 9000;
     const y = cam.cy - ((-EYE - (dist * dist) / (2 * RE)) / dist) * cam.F, x = ((k * 0.618 + h * 0.2) % 1) * W, len = 4 + 30 * (1500 / dist);
-    ctx.beginPath(); ctx.moveTo(x - len, y); ctx.lineTo(x + len, y); ctx.stroke();
+    far.rect(x - len, y, 2 * len, 1);
   }
-  ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  ctx.globalAlpha = night ? 0.06 : 0.12 + 0.02 * bf; ctx.fillStyle = hi; ctx.fill(far);
+  ctx.globalAlpha = 1;
 }
 
 const LIGHT: Record<string, string> = { W: '255,248,228', R: '255,48,40', G: '40,255,130', Y: '255,214,40', A: '255,190,110' };
@@ -341,7 +408,237 @@ function lightAlpha(d: number, rangeNM: number, sk: Sky): number {
   return clamp(0.4 + 0.9 * (1 - d / rng), 0, 1) * (sk.night ? 1 : d < NM ? 0.3 : 0);
 }
 
+const GRASS = hex('#5c8a3a'), SAND = hex('#cdbb8a');
 const HULL = ['#2c3137', '#5b2424', '#1f3a57', '#2b4630', '#43403c', '#6b3a1f'];
+
+// ---------------------------------------------------------------- silhouettes en blocs (style « arcade »)
+
+/** Empreinte d'un bloc dans le repère du navire : a vers l'avant, b vers tribord (m), polygone convexe. */
+type Foot = [number, number][];
+/** Bloc prismatique ; hull = coque (dessinée en premier), nt = dessus masqué par le bloc posé dessus. */
+interface Part { f: Foot; z0: number; z1: number; c: RGB; hull?: boolean; nt?: boolean; ca: number; cb: number }
+/** Bandeau de fenêtres : face verticale unique de (a0, b0) à (a1, b1), normale sortante (na, nb). */
+interface Dec { a0: number; b0: number; a1: number; b1: number; z0: number; z1: number; na: number; nb: number }
+interface Model { parts: Part[]; decs: Dec[]; mastBase: number; key: string }
+
+const BOXC = ['#b03a2e', '#2e5e8c', '#3f7a3a', '#c9772b', '#8a8a82', '#e0ded6', '#6a3d7a', '#1f4f5c', '#b8a23a'].map(hex);
+const HULLC = HULL.map(hex);
+const FUNC = ['#c23b2a', '#1f3a57', '#e2b22c', '#2a2a2a', '#3f7a3a'].map(hex);
+const C_WHITE = hex('#e8e6de'), C_RED = hex('#8e2b22'), C_GREY = hex('#8d9088'), C_DARK = hex('#262626'), C_BLUE = hex('#1f3a57');
+const C_GLASS = hex('#22303a'), C_LIT = hex('#ffcf8a');
+/** Direction horizontale du soleil (vers le sud-ouest, figée) pour l'ombrage des faces. */
+const SUN_X = -0.6, SUN_Y = -0.8;
+const hh = (i: number): number => Math.abs(Math.sin(i * 12.9898 + 4.1414) * 43758.5453) % 1;
+
+const models = new Map<number, Model>();
+function modelOf(t: Target): Model {
+  const key = `${t.L}|${t.name}|${t.type}`, m0 = models.get(t.id);
+  if (m0 && m0.key === key) return m0;
+  const m = buildModel(t, key);
+  models.set(t.id, m);
+  return m;
+}
+
+/** Construit la silhouette en blocs d'une cible selon sa famille (porte-conteneurs, pétrolier, transbordeur…). */
+function buildModel(t: Target, key: string): Model {
+  const k = shipKind(t), L = t.L, id = t.id;
+  const B = k === 'fish' ? L / 3.6 : k === 'ferry' || k === 'roro' ? L / 6.5 : L / 7;
+  const fb = clamp(0.045 * L, 1.2, 12);
+  const parts: Part[] = [], decs: Dec[] = [];
+  let mastBase = fb;
+  const add = (f: Foot, z0: number, z1: number, c: RGB, o: { hull?: boolean; nt?: boolean } = {}) => {
+    const ca = f.reduce((s, p) => s + p[0], 0) / f.length, cb = f.reduce((s, p) => s + p[1], 0) / f.length;
+    parts.push({ f, z0, z1, c, ca, cb, ...o });
+  };
+  const rect = (a0: number, a1: number, b0: number, b1: number): Foot => [[a0, b0], [a1, b0], [a1, b1], [a0, b1]];
+  const box = (a0: number, a1: number, hb: number, z0: number, z1: number, c: RGB, nt = false, bc = 0) => add(rect(a0, a1, bc - hb, bc + hb), z0, z1, c, { nt });
+  /** Fenêtres : sur l'avant (f), l'arrière (r) et les deux bords (s) d'un bloc. */
+  const win = (a0: number, a1: number, hb: number, z0: number, z1: number, sides: string) => {
+    if (sides.includes('f')) decs.push({ a0: a1, b0: -hb, a1: a1, b1: hb, z0, z1, na: 1, nb: 0 });
+    if (sides.includes('r')) decs.push({ a0: a0, b0: -hb, a1: a0, b1: hb, z0, z1, na: -1, nb: 0 });
+    if (sides.includes('s')) decs.push({ a0, b0: hb, a1, b1: hb, z0, z1, na: 0, nb: 1 }, { a0, b0: -hb, a1, b1: -hb, z0, z1, na: 0, nb: -1 });
+  };
+  /** Château : emménagements, passerelle avec ailerons et fenêtres, cheminée. */
+  const house = (a0: number, a1: number, hb: number, zTop: number) => {
+    const da = a1 - a0;
+    box(a0, a1, hb, fb, zTop - 2.6, C_WHITE);
+    box(a0 + 0.15 * da, a1, hb, zTop - 2.6, zTop, C_WHITE);
+    box(a1 - Math.min(2.5, 0.2 * da), a1, B / 2, zTop - 2.4, zTop - 1.4, C_WHITE); // ailerons
+    win(a0 + 0.15 * da, a1, hb, zTop - 2.1, zTop - 0.9, 'fs');
+    for (let z = fb + 1.2; z < zTop - 3.6; z += 2.8) win(a0 + 0.12 * da, a1 - 0.1 * da, hb, z, z + 1, 's');
+    for (let z = fb + 1.2; z < zTop - 3.6; z += 2.8) win(a0, a1, hb * 0.6, z, z + 1, 'f');
+    const fh = 0.035 * L + 3, fa0 = a0 + 0.02 * da, fa1 = a0 + 0.02 * da + Math.max(1.5, 0.3 * da), fc = FUNC[id % FUNC.length];
+    box(fa0, fa1, Math.max(0.8, B / 8), zTop - 1, zTop + fh * 0.82, fc, true);
+    box(fa0, fa1, Math.max(0.8, B / 8), zTop + fh * 0.82, zTop + fh, C_DARK);
+  };
+
+  if (k === 'sail') {
+    add([[L / 2, 0], [0.1 * L, B / 2], [-L / 2, B / 2.4], [-L / 2, -B / 2.4], [0.1 * L, -B / 2]], 0, 1, C_WHITE, { hull: true });
+    return { parts, decs, mastBase: 1, key };
+  }
+  // coque : œuvres vives (bande de flottaison) puis œuvres mortes, gaillard d'avant
+  const hc = k === 'ferry' ? C_WHITE : k === 'roro' ? (id % 2 ? C_WHITE : HULLC[id % HULLC.length]) : k === 'tank' ? [C_RED, HULLC[0], HULLC[2]][id % 3]
+    : k === 'fish' ? [C_BLUE, hex('#7a2a24'), hex('#2b4630'), hex('#b8a23a')][id % 4] : HULLC[id % HULLC.length];
+  const hullF: Foot = [[L / 2, 0], [0.34 * L, B / 2], [-0.42 * L, B / 2], [-L / 2, 0.38 * B], [-L / 2, -0.38 * B], [-0.42 * L, -B / 2], [0.34 * L, -B / 2]];
+  add(hullF, 0, 0.25 * fb, k === 'ferry' ? C_BLUE : C_RED, { hull: true, nt: true });
+  add(hullF, 0.25 * fb, fb, hc, { hull: true });
+  if (k !== 'fish') add([[L / 2, 0], [0.34 * L, B / 2], [0.3 * L, B / 2], [0.3 * L, -B / 2], [0.34 * L, -B / 2]], fb, fb + Math.max(1.2, 0.012 * L), hc);
+  const hs = clamp(0.09 * L, 4, 28);
+
+  switch (k) {
+    case 'pc': {
+      house(-0.4 * L, -0.29 * L, 0.42 * B, fb + Math.max(hs, 0.1 * L));
+      const nb = L < 160 ? 6 : 9, a0 = -0.27 * L, len = (0.7 * L) / nb;
+      for (let i = 0; i < nb; i++) for (let r = 0; r < 2; r++) {
+        const s0 = a0 + i * len, s1 = s0 + len * 0.9, bc = (r ? 1 : -1) * 0.235 * B, j = id * 31 + i * 7 + r * 3;
+        const h1 = 2.6 * (1 + Math.floor(hh(j) * 2)), h2 = 2.6 * (i === nb - 1 ? Math.floor(hh(j + 1) * 2) : 1 + Math.floor(hh(j + 1) * 3));
+        box(s0, s1, 0.225 * B, fb, fb + h1, BOXC[Math.floor(hh(j + 2) * BOXC.length)], h2 > 0, bc);
+        if (h2 > 0) box(s0, s1, 0.225 * B, fb + h1, fb + h1 + h2, BOXC[Math.floor(hh(j + 3) * BOXC.length)], false, bc);
+      }
+      break;
+    }
+    case 'tank':
+      house(-0.4 * L, -0.29 * L, 0.42 * B, fb + hs);
+      box(-0.27 * L, 0.42 * L, Math.max(0.5, 0.04 * B), fb, fb + 1.4, C_GREY); // tuyautage de pont
+      box(-0.03 * L, 0.03 * L, 0.38 * B, fb, fb + 2.2, C_GREY); // manifold
+      break;
+    case 'lng':
+      house(-0.4 * L, -0.29 * L, 0.42 * B, fb + hs);
+      for (let i = 0; i < 4; i++) { // sphères Moss en gradins
+        const c = -0.2 * L + i * 0.18 * L;
+        box(c - 0.08 * L, c + 0.08 * L, 0.4 * B, fb, fb + 0.03 * L, C_WHITE, true);
+        box(c - 0.06 * L, c + 0.06 * L, 0.3 * B, fb + 0.03 * L, fb + 0.05 * L, C_WHITE, true);
+        box(c - 0.035 * L, c + 0.035 * L, 0.18 * B, fb + 0.05 * L, fb + 0.06 * L, C_WHITE);
+      }
+      break;
+    case 'roro': {
+      const top = fb + 0.11 * L, sc = hc === C_WHITE ? C_WHITE : hc;
+      box(-0.47 * L, 0.4 * L, 0.48 * B, fb, top, sc);
+      box(0.4 * L, 0.45 * L, 0.4 * B, fb, fb + 0.075 * L, sc);
+      box(0.3 * L, 0.4 * L, 0.42 * B, top, top + 3, C_WHITE);
+      win(0.3 * L, 0.4 * L, 0.42 * B, top + 1, top + 2.3, 'f');
+      box(-0.42 * L, -0.37 * L, B / 9, top, top + 5, FUNC[id % FUNC.length]);
+      mastBase = top + 3;
+      break;
+    }
+    case 'ferry': {
+      const n = L > 120 ? 5 : 2, dh = Math.max(2.8, 0.02 * L);
+      let z = fb;
+      for (let i = 0; i < n; i++) {
+        const a0 = -0.42 * L + 0.03 * L * i, a1 = 0.3 * L - 0.045 * L * i, hb = (0.48 - 0.035 * i) * B;
+        box(a0, a1, hb, z, z + dh, C_WHITE, i < n - 1);
+        win(a0 + 0.02 * L, a1 - 0.01 * L, hb, z + 0.35 * dh, z + 0.7 * dh, i === n - 1 ? 'fs' : 's');
+        z += dh;
+      }
+      box(-0.36 * L, -0.28 * L, B / 7, z, z + 0.045 * L, FUNC[id % FUNC.length]);
+      mastBase = z;
+      break;
+    }
+    case 'bulk': {
+      house(-0.4 * L, -0.29 * L, 0.42 * B, fb + hs);
+      const n = 7, a0 = -0.26 * L, len = (0.66 * L) / n, hcol = [hex('#7d2f26'), hex('#3f5a32'), C_GREY][id % 3];
+      for (let i = 0; i < n; i++) box(a0 + i * len + 0.1 * len, a0 + (i + 0.9) * len, 0.36 * B, fb, fb + 0.012 * L + 1.5, hcol);
+      for (const i of [1, 3, 5]) { const c = a0 + i * len; box(c - 1.2, c + 1.2, 1.2, fb, fb + 0.07 * L, hex('#d8c24a')); }
+      break;
+    }
+    case 'ram':
+      house(0.05 * L, 0.3 * L, 0.42 * B, fb + hs);
+      box(-0.2 * L, 0, 0.3 * B, fb, fb + 2.5, C_GREY); // cuve à câble
+      for (const s of [-1, 1]) box(-0.47 * L, -0.44 * L, 0.8, fb, fb + 0.12 * L, hex('#d8c24a'), false, s * 0.36 * B);
+      box(-0.47 * L, -0.44 * L, 0.38 * B, fb + 0.12 * L - 1.5, fb + 0.12 * L, hex('#d8c24a'));
+      break;
+    case 'fish':
+      box(0.05 * L, 0.25 * L, 0.33 * B, fb, fb + 2.6, C_WHITE);
+      win(0.05 * L, 0.25 * L, 0.33 * B, fb + 1.3, fb + 2.2, 'fs');
+      for (const s of [-1, 1]) box(-0.44 * L, -0.4 * L, 0.3, fb, fb + 0.22 * L, C_DARK, false, s * 0.38 * B); // portique
+      box(-0.44 * L, -0.4 * L, 0.4 * B, fb + 0.22 * L - 0.6, fb + 0.22 * L, C_DARK);
+      break;
+    default: { // cargo, caboteur, NUC
+      const fwd = k === 'coaster' && id % 2 === 0;
+      if (fwd) { house(0.12 * L, 0.3 * L, 0.42 * B, fb + hs); box(-0.4 * L, 0.05 * L, 0.36 * B, fb, fb + 1.6, C_GREY); }
+      else {
+        house(-0.4 * L, -0.29 * L, 0.42 * B, fb + hs);
+        const n = 3, a0 = -0.22 * L, len = (0.6 * L) / n;
+        for (let i = 0; i < n; i++) box(a0 + i * len + 0.12 * len, a0 + (i + 0.88) * len, 0.36 * B, fb, fb + 1.8, hex('#6d4a2a'));
+        for (const i of [1, 2]) { const c = a0 + i * len; box(c - 0.8, c + 0.8, 0.8, fb, fb + 0.06 * L + 3, hex('#d8c24a')); }
+      }
+    }
+  }
+  return { parts, decs, mastBase, key };
+}
+
+/** Dessine un bloc prismatique : faces latérales tournées vers l'œil, ombrées selon le soleil, et dessus. */
+function drawPart(t: Target, p: Part, sh: (c: RGB, k: number) => string): void {
+  const s = Math.sin(t.hdg * D2R), c = Math.cos(t.hdg * D2R), ox = t.x * NM - cam.ex, oy = t.y * NM - cam.ey, n = p.f.length;
+  const lo: ([number, number, number] | null)[] = [], hi: ([number, number, number] | null)[] = [];
+  for (const [a, b] of p.f) { const x = ox + a * s + b * c, y = oy + a * c - b * s; lo.push(proj(x, y, p.z0)); hi.push(proj(x, y, p.z1)); }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, [a0, b0] = p.f[i], [a1, b1] = p.f[j];
+    let na = b1 - b0, nb = -(a1 - a0);
+    const ma = (a0 + a1) / 2, mb = (b0 + b1) / 2;
+    if (na * (ma - p.ca) + nb * (mb - p.cb) < 0) { na = -na; nb = -nb; }
+    const nx = na * s + nb * c, ny = na * c - nb * s;
+    if (nx * (ox + ma * s + mb * c) + ny * (oy + ma * c - mb * s) >= 0) continue;
+    const P0 = lo[i], P1 = lo[j], P2 = hi[j], P3 = hi[i];
+    if (!P0 || !P1 || !P2 || !P3) continue;
+    const ln = Math.hypot(nx, ny) || 1;
+    ctx.fillStyle = sh(p.c, 0.7 + 0.25 * Math.max(0, (nx * SUN_X + ny * SUN_Y) / ln));
+    ctx.beginPath(); ctx.moveTo(P0[0], P0[1]); ctx.lineTo(P1[0], P1[1]); ctx.lineTo(P2[0], P2[1]); ctx.lineTo(P3[0], P3[1]); ctx.closePath(); ctx.fill();
+  }
+  if (!p.nt && p.z1 < EYE) {
+    ctx.fillStyle = sh(p.c, 1);
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) { const q = hi[i]; if (!q) return; if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+/** Bandeaux de fenêtres tournés vers l'œil : vitrage sombre de jour, éclairés en partie la nuit. */
+function drawDecs(t: Target, m: Model, sh: (c: RGB, k: number) => string, v: number, night: boolean): void {
+  const s = Math.sin(t.hdg * D2R), c = Math.cos(t.hdg * D2R), ox = t.x * NM - cam.ex, oy = t.y * NM - cam.ey;
+  m.decs.forEach((e, i) => {
+    const nx = e.na * s + e.nb * c, ny = e.na * c - e.nb * s, ma = (e.a0 + e.a1) / 2 + e.na * 0.1, mb = (e.b0 + e.b1) / 2 + e.nb * 0.1;
+    if (nx * (ox + ma * s + mb * c) + ny * (oy + ma * c - mb * s) >= 0) return;
+    const P = (a: number, b: number, z: number) => proj(ox + (a + e.na * 0.1) * s + (b + e.nb * 0.1) * c, oy + (a + e.na * 0.1) * c - (b + e.nb * 0.1) * s, z);
+    const q0 = P(e.a0, e.b0, e.z0), q1 = P(e.a1, e.b1, e.z0), q2 = P(e.a1, e.b1, e.z1), q3 = P(e.a0, e.b0, e.z1);
+    if (!q0 || !q1 || !q2 || !q3) return;
+    const lit = night && S.env.vis !== 'poor' && hh(t.id * 17 + i) < 0.7;
+    ctx.fillStyle = lit ? mix(C_LIT, [0, 0, 0], 0.15 + 0.6 * v) : sh(C_GLASS, 1);
+    ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.closePath(); ctx.fill();
+  });
+}
+
+/** Navire proche : blocs triés du plus lointain au plus proche (coque d'abord), fenêtres, mâts. */
+function drawNear(t: Target, sh: (c: RGB, k: number) => string, v: number, night: boolean): void {
+  const m = modelOf(t), s = Math.sin(t.hdg * D2R), c = Math.cos(t.hdg * D2R), ox = t.x * NM - cam.ex, oy = t.y * NM - cam.ey;
+  const key = (p: Part) => Math.hypot(ox + p.ca * s + p.cb * c, oy + p.ca * c - p.cb * s) - p.z0 * 1e-3;
+  const hull = m.parts.filter((p) => p.hull), deck = m.parts.filter((p) => !p.hull).map((p) => ({ p, k: key(p) })).sort((u, w) => w.k - u.k);
+  for (const p of hull) drawPart(t, p, sh);
+  for (const { p } of deck) drawPart(t, p, sh);
+  drawDecs(t, m, sh, v, night);
+  const L = t.L, hM = mastH(L);
+  const mast = (a: number, top: number) => {
+    if (top < m.mastBase + 1) return;
+    const q0 = proj(...shipPt(t, a, 0, m.mastBase)), q1 = proj(...shipPt(t, a, 0, top));
+    if (!q0 || !q1) return;
+    ctx.strokeStyle = sh(C_DARK, 1); ctx.lineWidth = Math.max(0.8, (0.6 / q0[2]) * cam.F);
+    ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.stroke();
+  };
+  if (t.type === 'sail') return;
+  mast(t.type === 'fish' ? 0.2 * L : 0.25 * L, hM);
+  if (L >= 50 && t.type !== 'fish') mast(-0.3 * L, hM + Math.max(4.5, 0.04 * L));
+}
+
+/** Sillage : bande d'écume qui s'élargit et s'efface sur l'arrière (dessinée avant la coque). */
+function wake(t: Target, d: number, sk: Sky, v: number): void {
+  if (t.stw <= 3 || d > 4 * NM || v >= 0.9 || (sk.night && d > 0.5 * NM)) return;
+  const L = t.L, B = Math.max(3, L / 7), wk: [number, number, number][] = [];
+  for (const [a, b] of [[-L / 2, -B * 0.4], [-L / 2 - L * 0.9, -B * 1.4], [-L / 2 - L * 0.9, B * 1.4], [-L / 2, B * 0.4]]) { const q = proj(...shipPt(t, a, b, 0)); if (q) wk.push(q); }
+  if (wk.length < 4) return;
+  ctx.fillStyle = mix([235, 242, 245], sk.hor, v); ctx.globalAlpha = sk.night ? 0.08 : 0.3;
+  ctx.beginPath(); wk.forEach((q, k) => (k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+}
 
 function drawTarget(t: Target, d: number, sk: Sky): void {
   if (d > 26 * NM) return;
@@ -351,15 +648,19 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
   const shade = (c: RGB): string => mix(sk.night ? dark(c, d < 600 ? 0.18 : 0.06) : c, sk.hor, v);
   ctx.save();
   if (d > dH) { ctx.beginPath(); ctx.rect(0, 0, W, cam.yH); ctx.clip(); }
+  // détail en blocs dès que le navire mesure plus de 45 pixels à l'écran, silhouette simple au-delà
+  const near = v < 0.99 && (L / d) * cam.F > 45;
+  wake(t, d, sk, v);
   if (v < 0.99) {
     const hullC = hex(HULL[t.id % HULL.length]), white = hex('#e6e4dc');
+    if (near) drawNear(t, (c: RGB, k: number) => mix(dark(c, k * (sk.night ? (d < 600 ? 0.18 : 0.06) : 1)), sk.hor, v), v, sk.night);
     if (t.type === 'sail') {
-      solid(t, [[L / 2, 0, 1], [0, -B / 2, 1], [0, B / 2, 1], [-L / 2, -B / 2.4, 1], [-L / 2, B / 2.4, 1], [L / 2, 0, 0], [-L / 2, 0, 0]], shade(hex('#f2f2ee')));
+      if (!near) solid(t, [[L / 2, 0, 1], [0, -B / 2, 1], [0, B / 2, 1], [-L / 2, -B / 2.4, 1], [-L / 2, B / 2.4, 1], [L / 2, 0, 0], [-L / 2, 0, 0]], shade(hex('#f2f2ee')));
       if (t.stw > 0.3) {
         solid(t, [[0.05 * L, 0, 1.5], [0.05 * L, 0, 1.3 * L], [-0.4 * L, 0, 1.5]], shade(hex('#f6f4ec')));
         solid(t, [[0.08 * L, 0, 1.5], [0.08 * L, 0, 1.2 * L], [0.48 * L, 0, 1.3]], shade(hex('#ecebe4')));
       }
-    } else {
+    } else if (!near) {
       solid(t, [[L / 2, 0, fb + 1], [0.32 * L, -B / 2, fb], [0.32 * L, B / 2, fb], [-L / 2, -B / 2.2, fb], [-L / 2, B / 2.2, fb],
         [0.46 * L, 0, 0], [0.3 * L, -B / 2, 0], [0.3 * L, B / 2, 0], [-0.48 * L, -B / 2.4, 0], [-0.48 * L, B / 2.4, 0]], shade(hullC));
       const fwd = t.type === 'fish' || (t.type === 'small' && t.id % 2 === 0);
@@ -395,7 +696,7 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
   }
   ctx.restore();
   // éclairage de pont et des emménagements la nuit (aide à juger la distance, projecteurs des chalutiers en pêche)
-  if (sk.night && t.type !== 'sail' && S.env.vis !== 'poor') {
+  if (sk.night && t.type !== 'sail' && S.env.vis !== 'poor' && !near) {
     const L = t.L, B = Math.max(3, L / 7), fb = clamp(0.045 * L, 1.2, 12), hs = clamp(0.09 * L, 4, 26);
     const fwd = t.type === 'fish' || (t.type === 'small' && t.id % 2 === 0), s0 = fwd ? 0.12 * L : -0.44 * L, s1 = fwd ? 0.3 * L : -0.3 * L;
     const range = t.type === 'fish' ? 6 * NM : 3.5 * NM;
@@ -415,11 +716,6 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
       const r = Math.max(0.6, ((B * 0.28 * Math.min(1, t.stw / 15)) / q[2]) * cam.F);
       ctx.fillStyle = mix([245, 248, 250], sk.hor, v); ctx.globalAlpha = sk.night ? 0.25 : 0.85;
       ctx.beginPath(); ctx.ellipse(q[0], q[1], r * 1.3, r * 0.3, 0, 0, 7); ctx.fill();
-      const w0 = proj(...shipPt(t, -L / 2, 0, 0)), w1 = proj(...shipPt(t, -L / 2 - L * 0.8, 0, 0));
-      if (w0 && w1) {
-        ctx.strokeStyle = mix([235, 242, 245], sk.hor, v); ctx.globalAlpha = sk.night ? 0.15 : 0.5; ctx.lineWidth = Math.max(0.6, ((B * 0.5) / w0[2]) * cam.F);
-        ctx.beginPath(); ctx.moveTo(w0[0], w0[1]); ctx.lineTo(w1[0], w1[1]); ctx.stroke();
-      }
       ctx.globalAlpha = 1;
     }
   }

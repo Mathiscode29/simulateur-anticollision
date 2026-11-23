@@ -107,3 +107,20 @@ export function dayShapes(t: Target): Shape3D[] {
   if (t.type === 'ram') return [{ a, z: z + 3, shape: 'ball' }, { a, z: z + 1.5, shape: 'diamond' }, { a, z, shape: 'ball' }];
   return [];
 }
+
+/** Famille de silhouette d'une cible, d'après son type et sa désignation (vue extérieure). */
+export type ShipKind = 'pc' | 'tank' | 'lng' | 'roro' | 'ferry' | 'bulk' | 'cargo' | 'coaster' | 'fish' | 'sail' | 'ram';
+export function shipKind(t: Pick<Target, 'type' | 'name'>): ShipKind {
+  if (t.type === 'fish') return 'fish';
+  if (t.type === 'sail') return 'sail';
+  if (t.type === 'ram') return 'ram';
+  const n = t.name;
+  if (/conteneur/i.test(n)) return 'pc';
+  if (/trolier/i.test(n)) return 'tank';
+  if (/thanier/i.test(n)) return 'lng';
+  if (/roulier|voitures/i.test(n)) return 'roro';
+  if (/transbordeur|ferry/i.test(n)) return 'ferry';
+  if (/vraquier/i.test(n)) return 'bulk';
+  if (t.type === 'small') return 'coaster';
+  return 'cargo';
+}

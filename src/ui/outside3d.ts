@@ -73,7 +73,6 @@ export function init3D(wrap: HTMLElement): boolean {
   hemi = new THREE.HemisphereLight(0xdfe9f2, 0x2a3a40, 1); scene.add(hemi);
   sun = new THREE.DirectionalLight(0xfff4e0, 1.6); sun.position.set(-0.5, 0.6, 0.6); scene.add(sun);
   buildSky(); buildWater(); buildDeck();
-  try { if (localStorage.getItem('rendu3d') === '0') set3D(false); } catch { /* stockage indisponible */ }
   return true;
 }
 

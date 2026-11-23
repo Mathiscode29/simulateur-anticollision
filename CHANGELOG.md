@@ -7,6 +7,15 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.2 — 23 novembre 2026
+Vue extérieure en 2D « en blocs » par défaut, pour la fluidité.
+- Retour au rendu 2D en perspective comme rendu par défaut : le rendu WebGL de la V1.1 était trop lourd sur les ordinateurs courants.
+- Silhouettes en blocs par famille de navire, ombrées selon le soleil : porte-conteneurs (piles de conteneurs de couleurs), pétrolier (tuyautage, manifold), méthanier (sphères en gradins), vraquier (panneaux de cale, grues), roulier, transbordeur (ponts étagés), cargo et caboteur, chalutier (portique), câblier (portique arrière), voilier ; château avec passerelle, ailerons, fenêtres (éclairées la nuit) et cheminée.
+- Niveau de détail selon la taille à l'écran : blocs détaillés au-delà de 45 pixels, silhouette simple en deçà.
+- Ciel et mer en aplats par paliers, nuages en pavés qui dérivent avec le vent, relief côtier en gradins de 15 m avec herbe et grève, sillage en bande d'écume.
+- Allègement : vagues regroupées en quelques remplissages, vue extérieure limitée à 30 images par seconde, résolution plafonnée à un pixel par point.
+- Le rendu 3D reste disponible en essai (bouton « 3D », exige une bonne carte graphique) ; three.js n'est téléchargé qu'à ce moment-là (application principale ≈ 200 Ko au lieu de ≈ 790 Ko).
+
 ## V1.1 — 23 novembre 2026
 Vue extérieure en 3D (WebGL, three.js).
 - Mer : vagues de Gerstner selon la force de Beaufort, vaguelettes, reflets du ciel (Fresnel), reflet du soleil, moutons.
