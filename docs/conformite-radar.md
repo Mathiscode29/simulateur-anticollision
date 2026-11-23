@@ -62,6 +62,6 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 | Position du porteur en latitude / longitude WGS 84 | ✅ | Panneau de navigation, radar (curseur) et ECDIS. |
 | Contour de sécurité choisi par l'utilisateur, mis en valeur | ✅ | 10, 20 ou 30 m ; zones de profondeur colorées par rapport à ce contour. |
 | Alarme de franchissement du contour de sécurité dans un délai réglable | ✅ | 3, 6 ou 12 min sur le vecteur route fond, bande latérale de ± 0,1 NM ; alarme sonore. |
-| Indication d'entrée dans une zone particulière (DST) | ✅ | Alerte « attention » à l'entrée dans une voie ; R10 suivie en continu. |
+| Indication d'entrée dans une zone particulière (DST) | ✅ | Alerte « attention » à l'entrée dans une voie ou dans une zone de prudence ; R10 suivie en continu. Zones de prudence (tirets, « ! »), mouillages et phares (étoile, caractère, portée) affichés. |
 | Planification et vérification de route | 🟡 | Tracé à la souris, contrôle des segments par rapport au contour de sécurité ; pas de couloir de route paramétrable par segment. |
 | Présentation S-52 | 🟡 | Couleurs et symboles inspirés de S-52 (jour, crépuscule, nuit), carte schématique : pas de cellule S-57/S-101. |

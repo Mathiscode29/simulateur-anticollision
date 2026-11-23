@@ -226,7 +226,27 @@ function drawTss(pal: EPal, fs: number, k: number): void {
   }
   // limites des voies : tirets magenta ; ligne de séparation : trait large
   ctx.strokeStyle = pal.mag; ctx.lineWidth = 1.4; ctx.setLineDash([10, 6]);
-  for (const l of CHART.lanes) { polyPath(l.poly); ctx.stroke(); }
+  for (const l of CHART.lanes) for (const p of l.polys) { polyPath(p); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // zones de prudence : limite en tirets longs, symbole « ! » au centre
+  ctx.lineWidth = 1.2; ctx.setLineDash([14, 5, 3, 5]);
+  for (const z of CHART.prec) {
+    polyPath(z.poly); ctx.stroke();
+    const c = z.poly.reduce((s, p) => ({ x: s.x + p.x / z.poly.length, y: s.y + p.y / z.poly.length }), { x: 0, y: 0 }), q = toScr(c.x, c.y), r = fs * 0.9;
+    ctx.save(); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(q[0], q[1] - r); ctx.lineTo(q[0] + r, q[1] + r * 0.75); ctx.lineTo(q[0] - r, q[1] + r * 0.75); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = pal.mag; ctx.font = `700 ${fs}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', q[0], q[1] + r * 0.15);
+    if (S.ecdis.layers.names) { ctx.font = `600 ${fs * 0.8}px system-ui,sans-serif`; ctx.fillText(z.name, q[0], q[1] + r * 2); }
+    ctx.restore();
+  }
+  // mouillages : cercle en tirets, ancre
+  ctx.setLineDash([6, 4]);
+  for (const a of CHART.anch) {
+    const q = toScr(a.x, a.y), rr = a.r * k;
+    ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(4, rr), 0, 7); ctx.stroke();
+    ctx.save(); ctx.setLineDash([]); ctx.fillStyle = pal.mag; ctx.font = `700 ${fs * 1.1}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⚓', q[0], q[1]); if (S.ecdis.layers.names) { ctx.font = `600 ${fs * 0.8}px system-ui,sans-serif`; ctx.fillText(a.name, q[0], q[1] + Math.max(4, rr) + fs * 0.8); }
+    ctx.restore();
+  }
   ctx.setLineDash([]);
   ctx.globalAlpha = 0.55; ctx.lineWidth = 5;
   for (const pl of CHART.lines) { polyPath(pl, false); ctx.stroke(); }
@@ -255,6 +275,7 @@ function drawTss(pal: EPal, fs: number, k: number): void {
     for (let s = 1.5; s < len; s += 3.5) {
       const p = pointAt(l.axis, s), q = toScr(p.x, p.y);
       if (q[0] < -L || q[1] < -L || q[0] > W + L || q[1] > H + L) continue;
+      if (!l.polys.some((pl) => inPoly(pl, p.x, p.y))) continue; // l'axe se prolonge dans les zones de prudence
       ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate(p.brg * D2R);
       const w = L * 0.11, hw = L * 0.26, hl = L * 0.38;
       ctx.beginPath();
@@ -289,7 +310,13 @@ function drawMarks(pal: EPal, fs: number): void {
     ctx.globalAlpha = dim;
     // feu : virgule magenta
     ctx.fillStyle = pal.mag; ctx.beginPath(); ctx.ellipse(q[0] + 7, q[1] - 9, 3, 7, 0.6, 0, 7); ctx.fill();
-    if (m.kind === 'lv') {
+    if (m.kind === 'lh') {
+      // phare : étoile (point et cercle), feu de grande portée
+      ctx.fillStyle = pal.text; ctx.strokeStyle = pal.text; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(q[0], q[1], 2.2, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(q[0], q[1], 5.5, 0, 7); ctx.stroke();
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; line([q[0] + Math.cos(a) * 5.5, q[1] + Math.sin(a) * 5.5], [q[0] + Math.cos(a) * 9, q[1] + Math.sin(a) * 9]); }
+    } else if (m.kind === 'lv') {
       ctx.fillStyle = '#d01c1c'; ctx.strokeStyle = pal.text; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(q[0] - 8, q[1] - 2); ctx.lineTo(q[0] + 8, q[1] - 2); ctx.lineTo(q[0] + 5, q[1] + 3); ctx.lineTo(q[0] - 5, q[1] + 3); ctx.closePath(); ctx.fill(); ctx.stroke();
       line([q[0], q[1] - 2], [q[0], q[1] - 10]);
@@ -311,7 +338,7 @@ function drawMarks(pal: EPal, fs: number): void {
     ctx.globalAlpha = 1;
     if (S.ecdis.layers.names) {
       ctx.fillStyle = pal.text;
-      ctx.fillText(`${m.approx ? '≈' : ''}${m.name}${m.light ? ' ' + m.light : ''}${m.racon ? ' Racon' : ''}`, q[0] + 12, q[1] - 2);
+      ctx.fillText(`${m.approx ? '≈' : ''}${m.name}${m.light ? ' ' + m.light : ''}${m.range ? ' ' + m.range + 'M' : ''}${m.racon ? ' Racon' : ''}`, q[0] + 12, q[1] - 2);
     }
   }
 }
@@ -531,8 +558,8 @@ export function pickedInfo(): string[] {
   if (p.kind === 'mark') {
     const m = CHART.marks.find((x) => x.id === p.id);
     if (!m) return [];
-    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse' };
-    return [`${m.name} — ${kinds[m.kind]}`, `${fmtLat(m.lat)} ${fmtLon(m.lon)}${m.approx ? ' (position approchée)' : ''}`, m.light ? `Feu ${m.light}` : '', `Relèvement / distance : ${rb(m.x, m.y)}`, `Source : ${m.src}`];
+    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse', lh: 'phare' };
+    return [`${m.name} — ${kinds[m.kind]}`, `${fmtLat(m.lat)} ${fmtLon(m.lon)}${m.approx ? ' (position approchée)' : ''}`, m.light ? `Feu ${m.light}${m.range ? `, portée ${m.range} M` : ''}` : m.range ? `Portée ${m.range} M (caractère non renseigné)` : '', `Relèvement / distance : ${rb(m.x, m.y)}`, `Source : ${m.src}`];
   }
   return ['Navire porteur', `${fmtLat(toLL(o.x, o.y).lat)} ${fmtLon(toLL(o.x, o.y).lon)}`, `Tirant d'eau ${o.ship.mmg.d.toFixed(1)} m`];
 }

@@ -172,7 +172,7 @@ function background(pal: typeof EPAL.DAY): void {
   ctx.strokeStyle = pal.mag; ctx.globalAlpha = 0.6;
   for (const z of CHART.zones) { ctx.beginPath(); z.poly.forEach((p, i) => { const q = toS(p.x, p.y); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); }
   ctx.setLineDash([8, 6]);
-  for (const l of CHART.lanes) { ctx.beginPath(); l.poly.forEach((p, i) => { const q = toS(p.x, p.y); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); }
+  for (const pl of [...CHART.lanes.flatMap((l) => l.polys), ...CHART.prec.map((z) => z.poly)]) { ctx.beginPath(); pl.forEach((p, i) => { const q = toS(p.x, p.y); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); }
   ctx.setLineDash([]); ctx.globalAlpha = 1;
   // bancs (emprise schématique en gélule)
   ctx.strokeStyle = pal.vs; ctx.globalAlpha = 0.55; ctx.lineCap = 'round';

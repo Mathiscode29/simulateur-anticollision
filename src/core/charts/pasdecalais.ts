@@ -18,28 +18,8 @@
  */
 import { PDC_LAND } from './pasdecalais-land';
 
-/** Degrés + minutes décimales → degrés décimaux. */
-const dm = (d: number, m: number): number => d + m / 60;
-type LL = [number, number];
-const P = (latD: number, latM: number, lonD: number, lonM: number): LL => [dm(latD, latM), dm(lonD, lonM)];
-
-export type MarkKind = 'N' | 'S' | 'E' | 'W' | 'special' | 'safe' | 'lv' | 'light';
-export interface ChartMark { id: string; name: string; lat: number; lon: number; kind: MarkKind; light?: string; approx?: boolean; racon?: boolean; src: string }
-export interface ChartBank { name: string; lat: number; lon: number; len: number; wid: number; orient: number; min: number; src: string }
-export interface TssZone { id: string; name: string; pts: LL[] }
-export interface TssLane { id: 'NE' | 'SW'; name: string; pts: LL[]; axis: LL[] }
-
-export interface ChartSource {
-  key: string; name: string; lat0: number; lon0: number;
-  /** Emprise de la grille bathymétrique : latitude min/max, longitude min/max. */
-  bbox: [number, number, number, number];
-  land: number[][];
-  lanes: TssLane[]; zones: TssZone[]; lines: LL[][]; itz: TssZone[]; dw: LL[][];
-  marks: ChartMark[]; banks: ChartBank[];
-  /** Profondeur de référence hors bancs et hors côte (m), modèle schématique. */
-  baseDepth: number;
-  attribution: string;
-}
+import { P, dm, type ChartSource, type LL } from './types';
+export type { ChartBank, ChartMark, ChartSource, MarkKind } from './types';
 
 // ---------- Positions du DST (COLREG.2/Circ.59, annexe 8, WGS 84)
 const T: Record<string, LL> = {
@@ -63,10 +43,10 @@ export const PAS_DE_CALAIS: ChartSource = {
   land: PDC_LAND,
   lanes: [
     // Voie descendante (sud-ouest) : limite extérieure (23)-(24)-(25)-(26), limite intérieure (9)/(10)-(11) puis bord NW de la zone (f).
-    { id: 'SW', name: 'Voie descendante (SW)', pts: [T.p9, T.p23, T.p24, T.p25, T.p26, P(50, 47.23, 1, 8.23) /* pied de la perpendiculaire de (26) sur (15)-(16), fermeture */, T.p15, T.p14, T.p13, T.p11],
+    { id: 'SW', name: 'Voie descendante (SW)', polys: [[T.p9, T.p23, T.p24, T.p25, T.p26, P(50, 47.23, 1, 8.23) /* pied de la perpendiculaire de (26) sur (15)-(16), fermeture */, T.p15, T.p14, T.p13, T.p11]],
       axis: [P(51, 19.0, 1, 50.6), P(51, 11.5, 1, 41.3), P(51, 4.6, 1, 31.5), P(50, 58.3, 1, 22.0), P(50, 52.6, 1, 13.5), P(50, 49.5, 1, 7.5)] },
     // Voie montante (nord-est) : bord SE de la zone (f), ligne (11)-(10), zone (c), puis limite extérieure (39)-(40)-(41)-(42), zone (43)-(46).
-    { id: 'NE', name: 'Voie montante (NE)', pts: [T.p20, T.p21, T.p12, T.p11, T.p9, T.p7, T.p6, T.p45, T.p44, T.p42, T.p41, T.p40, T.p39],
+    { id: 'NE', name: 'Voie montante (NE)', polys: [[T.p20, T.p21, T.p12, T.p11, T.p9, T.p7, T.p6, T.p45, T.p44, T.p42, T.p41, T.p40, T.p39]],
       axis: [P(50, 41.0, 1, 21.0), P(50, 47.3, 1, 24.6), P(50, 53.8, 1, 27.4), P(51, 0.3, 1, 34.0), P(51, 6.0, 1, 43.0), P(51, 8.7, 1, 50.5), P(51, 12.0, 2, 1.0), P(51, 15.0, 2, 4.8)] },
   ],
   zones: [
@@ -108,7 +88,10 @@ export const PAS_DE_CALAIS: ChartSource = {
     { name: 'Dyck', lat: dm(51, 4.0), lon: dm(2, 2.0), len: 10, wid: 0.6, orient: 60, min: 5, src: 'banc de Flandre, emprise schématique' },
     { name: 'Ridens de Calais', lat: dm(51, 0.75), lon: dm(1, 50.25), len: 4, wid: 0.5, orient: 52, min: 4, src: 'emprise schématique jusqu\'à la bouée RCE' },
   ],
-  baseDepth: 45,
+  baseDepth: 45, coastScale: 1.2,
+  // relief schématique : falaises de Douvres, South Foreland, Folkestone, caps Blanc-Nez et Gris-Nez
+  landBase: 18,
+  relief: [[51.128, 1.335, 100, 1.05, true], [51.142, 1.375, 90, 1.05, true], [51.096, 1.235, 70, 1.05, true], [50.925, 1.712, 130, 1.05, true], [50.871, 1.585, 45, 1.05, true]],
   attribution: '© contributeurs OpenStreetMap (ODbL) · DST : OMI COLREG.2/Circ.59 · bathymétrie schématique',
 };
 

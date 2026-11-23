@@ -106,6 +106,7 @@ export function radarStep(dt: number): void {
   }
   // bouées et bateaux-feux
   for (const m of CHART.marks) {
+    if (m.kind === 'lh') continue; // phare à terre : confondu avec l'écho de côte
     const dx = m.x - o.x, dy = m.y - o.y, b = brgOf(dx, dy);
     if (!inSweep(b, a0, d)) continue;
     const r = Math.hypot(dx, dy);

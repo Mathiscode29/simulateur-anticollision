@@ -29,7 +29,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 ## Phase 1 bis — Exercices et route
 - [x] Route prévue en rouge sur le radar, couloir d'écart, points tournants, XTE / distance et relèvement du WP
 - [x] Tenue de route dans le bilan (écart maximal, temps hors couloir, reprise de la route)
-- [x] 22 exercices sur quatre niveaux (fondamentaux, situations combinées, avancé, Pas-de-Calais), dont rencontres après point tournant et avarie en croisement
+- [x] 25 exercices sur cinq niveaux (fondamentaux, situations combinées, avancé, Pas-de-Calais, Gibraltar), dont rencontres après point tournant et avarie en croisement
 - [ ] Éditeur d'exercices et partage par lien (voir phase 4)
 
 ## Phase 2 — Zone réelle et DST
@@ -37,6 +37,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Côte, échos de terre et de bouées, zones d'ombre radar (masquage derrière la terre)
 - [x] Trafic IA qui suit les voies du DST, ferry traversier, navire à contresens ; évaluation de la règle 10
 - [x] Trois exercices du Pas-de-Calais (traversée R10c, rattrapement en brume voie NE, navire à contresens voie SW)
+- [x] Détroit de Gibraltar : trait de côte OpenStreetMap, DST d'après COLREG.2/Circ.66 (voies en deux tronçons, zones de prudence, ZNC, mouillage), phares, relief schématique, trois exercices (transit ouest, appareillage de Tanger-Med de nuit, arrivée à Algeciras en brume)
 - [ ] Bathymétrie réelle libre (EMODnet) à la place du modèle schématique ; marée (hauteur et courants)
 - [ ] Pêcheurs dans la zone de séparation, routes des ferries Douvres–Calais
 - [ ] Zone d'Ouessant (DST d'Ouessant)
@@ -63,7 +64,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Progression de difficulté et banque de scénarios
 - [ ] Validation des scénarios par un professeur d'exploitation de l'ENSM
 - [ ] Bilan rattaché aux compétences STCW (tableau A-II/1)
-- [ ] Zones sur les routes de l'armement (Pas-de-Calais, Gibraltar, détroit de Singapour)
+- [ ] Zones sur les routes de l'armement (Pas-de-Calais et Gibraltar faits ; détroit de Singapour, Suez)
 
 ## Phase 5 — Vue passerelle
 - [x] Vue extérieure liée à la simulation (canvas 2D en perspective, sans bibliothèque 3D) : regard sur 180°, jumelles 7×, horizon et rotondité, brume, nuit, côte, bouées

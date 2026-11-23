@@ -2,24 +2,30 @@
  * Carte côté simulation (sans DOM) : géométrie en plan local, bathymétrie schématique, zones du DST,
  * requêtes de profondeur, d'appartenance aux voies et lancer de rayons pour les échos de côte.
  *
- * Deux cartes :
+ * Cartes :
  *  - « open » : zone d'entraînement au large (eau profonde, sans terre), utilisée par les exercices historiques ;
- *  - « pdc »  : Pas-de-Calais (voir src/core/charts/pasdecalais.ts pour les sources et les limites).
+ *  - « pdc »  : Pas-de-Calais (voir src/core/charts/pasdecalais.ts pour les sources et les limites) ;
+ *  - « gib »  : détroit de Gibraltar (voir src/core/charts/gibraltar.ts).
  */
-import { PAS_DE_CALAIS, type ChartBank, type ChartMark, type ChartSource } from '../core/charts/pasdecalais';
+import { PAS_DE_CALAIS } from '../core/charts/pasdecalais';
+import { GIBRALTAR } from '../core/charts/gibraltar';
+import type { ChartBank, ChartMark, ChartSource, Relief } from '../core/charts/types';
 import { setGeoRef, toXY } from '../core/geo';
 import { brgOf, clamp } from '../core/util';
 
-export type ChartKey = 'open' | 'pdc';
+export type ChartKey = 'open' | 'pdc' | 'gib';
 export interface XY { x: number; y: number }
-export interface LaneG { id: 'NE' | 'SW'; name: string; poly: XY[]; axis: XY[] }
+export interface LaneG { id: string; name: string; polys: XY[][]; axis: XY[] }
+export interface AnchG { name: string; x: number; y: number; r: number }
 export interface ZoneG { id: string; name: string; poly: XY[] }
 export interface Grid { x0: number; y0: number; dx: number; nx: number; ny: number; d: Float32Array }
 
 export interface Chart {
   key: ChartKey; name: string; lat0: number; lon0: number;
-  land: XY[][]; lanes: LaneG[]; zones: ZoneG[]; lines: XY[][]; itz: ZoneG[]; dw: XY[][];
+  land: XY[][]; lanes: LaneG[]; zones: ZoneG[]; lines: XY[][]; itz: ZoneG[]; dw: XY[][]; prec: ZoneG[]; anch: AnchG[];
   marks: (ChartMark & XY)[]; banks: (ChartBank & XY)[];
+  /** Relief de la vue extérieure (plan local) : altitude de base et sommets. */
+  landBase: number; relief: { x: number; y: number; h: number; r: number; cliff: boolean }[];
   grid: Grid | null;
   /** Segments de côte (x1, y1, x2, y2) pour le lancer de rayons. */
   edges: Float64Array;
@@ -31,16 +37,17 @@ export interface Chart {
 /** Zone d'entraînement au large : 47°30'N 006°30'W, plus de 2 000 m d'eau (pas de terre). */
 const OPEN: Chart = {
   key: 'open', name: 'Zone d\'entraînement au large (eau profonde)', lat0: 47.5, lon0: -6.5,
-  land: [], lanes: [], zones: [], lines: [], itz: [], dw: [], marks: [], banks: [], grid: null,
+  land: [], lanes: [], zones: [], lines: [], itz: [], dw: [], prec: [], anch: [], marks: [], banks: [], grid: null, landBase: 18, relief: [],
   edges: new Float64Array(0), deep: 2000, attribution: 'Zone d\'entraînement fictive en eau profonde',
 };
 
+const SOURCES: Record<Exclude<ChartKey, 'open'>, ChartSource> = { pdc: PAS_DE_CALAIS, gib: GIBRALTAR };
 const cache: Partial<Record<ChartKey, Chart>> = { open: OPEN };
 /** Carte courante. */
 export let CHART: Chart = OPEN;
 
 export function loadChart(key: ChartKey): Chart {
-  const c = cache[key] ?? (cache[key] = compile(PAS_DE_CALAIS));
+  const c = cache[key] ?? (cache[key] = compile(SOURCES[key as Exclude<ChartKey, 'open'>]));
   setGeoRef(c.lat0, c.lon0);
   CHART = c;
   return c;
@@ -56,7 +63,11 @@ function compile(s: ChartSource): Chart {
   for (const r of land) for (let i = 0; i < r.length - 1; i++) e.push(r[i].x, r[i].y, r[i + 1].x, r[i + 1].y);
   const c: Chart = {
     key: s.key as ChartKey, name: s.name, lat0: s.lat0, lon0: s.lon0, land,
-    lanes: s.lanes.map((l) => ({ id: l.id, name: l.name, poly: l.pts.map(llxy), axis: l.axis.map(llxy) })),
+    lanes: s.lanes.map((l) => ({ id: l.id, name: l.name, polys: l.polys.map((p) => p.map(llxy)), axis: l.axis.map(llxy) })),
+    prec: (s.prec ?? []).map((z) => ({ id: z.id, name: z.name, poly: z.pts.map(llxy) })),
+    anch: (s.anch ?? []).map((a) => ({ name: a.name, r: a.r, ...toXY(a.lat, a.lon, ref) })),
+    landBase: s.landBase ?? 18,
+    relief: (s.relief ?? []).map(([la, lo, h, r, cliff]: Relief) => ({ ...toXY(la, lo, ref), h, r, cliff })),
     zones: s.zones.map((z) => ({ id: z.id, name: z.name, poly: z.pts.map(llxy) })),
     lines: s.lines.map((l) => l.map(llxy)), itz: s.itz.map((z) => ({ id: z.id, name: z.name, poly: z.pts.map(llxy) })),
     dw: s.dw.map((l) => l.map(llxy)),
@@ -122,7 +133,8 @@ const LAND_D = -10;
 /**
  * Grille de profondeur (pas 0,2 NM) :
  *  - terre (remplissage des polygones par balayage de lignes) ;
- *  - remontée vers la côte : d = fond · (1 − e^(−distance / 1,2 NM)), distance par transformée de chanfrein ;
+ *  - remontée vers la côte : d = fond · (1 − e^(−distance / échelle)), échelle propre à la carte (1,2 NM par défaut),
+ *    distance par transformée de chanfrein ;
  *  - bancs en « gélule » : profondeur minimale sur l'axe, remontée lissée sur 0,9 NM de part et d'autre.
  */
 function buildGrid(c: Chart, s: ChartSource): Grid {
@@ -156,12 +168,12 @@ function buildGrid(c: Chart, s: ChartSource): Grid {
     if (j < ny - 1) { v = Math.min(v, dist[k + nx] + 1); if (i < nx - 1) v = Math.min(v, dist[k + nx + 1] + S2); if (i > 0) v = Math.min(v, dist[k + nx - 1] + S2); }
     dist[k] = v;
   }
-  const base = s.baseDepth;
+  const base = s.baseDepth, sc = s.coastScale ?? 1.2;
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i;
     if (dist[k] === 0) { d[k] = LAND_D; continue; }
     const x = a.x + i * dx, y = a.y + j * dx;
-    let v = base * (1 - Math.exp(-(dist[k] * dx) / 1.2));
+    let v = base * (1 - Math.exp(-(dist[k] * dx) / sc));
     for (const bk of c.banks) v = Math.min(v, bankDepth(bk, x, y, base));
     d[k] = v;
   }
@@ -225,20 +237,23 @@ export function contours(level: number, c: Chart = CHART): number[] {
 
 // ---------------------------------------------------------------- dispositif de séparation du trafic
 
-export type TssKind = 'none' | 'laneNE' | 'laneSW' | 'sep' | 'itz';
+/** Voie : `lane` + identifiant de la voie (laneNE, laneSW au Pas-de-Calais ; laneW, laneE à Gibraltar). */
+export type TssKind = 'none' | 'sep' | 'itz' | 'prec' | `lane${string}`;
 export interface TssInfo { kind: TssKind; name: string; dir: number | null; lane: LaneG | null }
+export const isLane = (k: string): boolean => k.startsWith('lane');
 
-/** Élément du DST au point (zone de séparation prioritaire, puis voies, puis zones de navigation côtière). */
+/** Élément du DST au point (zone de séparation prioritaire, puis voies, zones de prudence, zones de navigation côtière). */
 export function tssAt(x: number, y: number, c: Chart = CHART): TssInfo {
   for (const z of c.zones) if (inPoly(z.poly, x, y)) return { kind: 'sep', name: z.name, dir: null, lane: null };
-  for (const l of c.lanes) if (inPoly(l.poly, x, y)) {
-    return { kind: l.id === 'NE' ? 'laneNE' : 'laneSW', name: l.name, dir: projOnPolyline(l.axis, x, y).brg, lane: l };
+  for (const l of c.lanes) if (l.polys.some((p) => inPoly(p, x, y))) {
+    return { kind: `lane${l.id}`, name: l.name, dir: projOnPolyline(l.axis, x, y).brg, lane: l };
   }
+  for (const z of c.prec) if (inPoly(z.poly, x, y)) return { kind: 'prec', name: z.name, dir: null, lane: null };
   for (const z of c.itz) if (inPoly(z.poly, x, y)) return { kind: 'itz', name: z.name, dir: null, lane: null };
   return { kind: 'none', name: c.lanes.length ? 'Hors DST' : 'Large', dir: null, lane: null };
 }
 
-export const laneOf = (id: 'NE' | 'SW', c: Chart = CHART): LaneG | undefined => c.lanes.find((l) => l.id === id);
+export const laneOf = (id: string, c: Chart = CHART): LaneG | undefined => c.lanes.find((l) => l.id === id);
 
 /**
  * Cap de consigne d'un navire qui suit une voie : poursuite d'un point situé 1,5 NM plus loin sur l'axe,
@@ -247,8 +262,17 @@ export const laneOf = (id: 'NE' | 'SW', c: Chart = CHART): LaneG | undefined => 
 export function laneSteer(l: LaneG, x: number, y: number, off: number, dir: 1 | -1): number {
   const p = projOnPolyline(l.axis, x, y), L = polyLength(l.axis);
   const s = clamp(p.s + dir * 1.5, 0, L), q = pointAt(l.axis, s);
-  const nb = (q.brg + 90) * (Math.PI / 180);
-  const tx = q.x + Math.sin(nb) * off, ty = q.y + Math.cos(nb) * off;
+  const nb = (q.brg + 90) * (Math.PI / 180), c = CHART, inLane = (u: number, v: number) => l.polys.some((pl) => inPoly(pl, u, v));
+  // point acceptable : dans la voie, ou dans une zone de prudence, mais jamais dans une zone de séparation ni côtière
+  const okAt = (u: number, v: number) => !c.zones.some((z) => inPoly(z.poly, u, v)) && !c.itz.some((z) => inPoly(z.poly, u, v))
+    && (inLane(u, v) || c.prec.some((z) => inPoly(z.poly, u, v)) || !inLane(q.x, q.y));
+  // voie qui se rétrécit (Gibraltar) : le décalage latéral est réduit pour garder 0,3 NM de marge
+  // dans une zone de prudence (jonction des tronçons d'une voie), le flux se resserre sur l'axe
+  let o = inLane(q.x, q.y) || !c.prec.some((z) => inPoly(z.poly, q.x, q.y)) ? off : clamp(off, -0.4, 0.4);
+  const m = (v: number) => v + Math.sign(v) * 0.3;
+  const okPath = (v: number) => { const u = q.x + Math.sin(nb) * m(v), w = q.y + Math.cos(nb) * m(v); return okAt(u, w) && okAt((u + x) / 2, (w + y) / 2); };
+  for (let k = 0; k < 4 && o !== 0 && !okPath(o); k++) o = Math.abs(o) < 0.2 ? 0 : o * 0.5;
+  const tx = q.x + Math.sin(nb) * o, ty = q.y + Math.cos(nb) * o;
   return brgOf(tx - x, ty - y);
 }
 

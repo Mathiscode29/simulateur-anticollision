@@ -7,12 +7,15 @@
  */
 import { S, logE, type AlertCat } from '../core/state';
 import { adiff, brgOf, fMin } from '../core/util';
-import { CHART, depthAt, projOnPolyline, tssAt } from './chart';
+import { CHART, depthAt, isLane, laneOf, projOnPolyline, tssAt } from './chart';
 import { raiseEvent } from './alerts';
 
 const KIND_TXT: Record<string, string> = {
-  laneNE: 'voie montante (NE)', laneSW: 'voie descendante (SW)', sep: 'zone de séparation', itz: 'zone de navigation côtière', none: 'hors DST',
+  sep: 'zone de séparation', itz: 'zone de navigation côtière', prec: 'zone de prudence', none: 'hors DST',
 };
+/** Libellé d'un élément du DST (« voie descendante (SW) », « voie ouest (vers l'Atlantique) »…). */
+const kindTxt = (k: string): string => (isLane(k) ? laneTxt(k.slice(4)) : KIND_TXT[k] ?? k);
+const laneTxt = (id: string): string => { const n = laneOf(id)?.name; return n ? n[0].toLowerCase() + n.slice(1) : `voie ${id}`; };
 
 /** Direction de la voie la plus proche (pour juger une traversée de zone de séparation). */
 function nearestLaneDir(x: number, y: number): number | null {
@@ -61,19 +64,20 @@ export function navStep(dt: number): void {
   w.t += dt;
   if (info.kind !== w.kind) {
     if (w.cur && w.kind !== 'sep') { if (w.cur.t > 60) w.crossings.push(w.cur); w.cur = null; }
-    if (info.kind !== 'none') logE(`Entrée : ${KIND_TXT[info.kind]}`);
+    if (info.kind !== 'none') logE(`Entrée : ${kindTxt(info.kind)}`);
     else if (w.kind !== 'none') logE('Sortie du DST');
-    if (info.kind === 'laneNE' || info.kind === 'laneSW') raiseEvent(`tss-${info.kind}-${Math.round(S.t)}`, 'caution', `ECDIS : entrée dans le DST, ${KIND_TXT[info.kind]}`);
+    if (isLane(info.kind) && !isLane(w.kind)) raiseEvent(`tss-${info.kind}-${Math.round(S.t)}`, 'caution', `ECDIS : entrée dans le DST, ${kindTxt(info.kind)}`);
+    if (info.kind === 'prec') raiseEvent(`tss-prec-${Math.round(S.t)}`, 'caution', `ECDIS : entrée dans la ${info.name.toLowerCase()}, naviguer avec une prudence particulière`);
     w.kind = info.kind;
   }
-  if ((info.kind === 'laneNE' || info.kind === 'laneSW') && info.dir !== null) {
-    const dev = Math.abs(adiff(o.hdg, info.dir)), name = info.kind === 'laneNE' ? 'NE' : 'SW';
+  if (isLane(info.kind) && info.dir !== null) {
+    const dev = Math.abs(adiff(o.hdg, info.dir)), name = info.kind.slice(4);
     // ≤ 25° : suit la voie ; 25-45° : route oblique (une manœuvre d'évitement reste admise) ;
     // 45-135° : traversée, jugée sur l'écart à la perpendiculaire ; ≥ 155° : contresens.
     if (dev <= 25) w.inLane += dt;
     else if (dev >= 155) {
       w.wrong += dt;
-      cond.push({ id: 'tss-wrong', cat: 'warning', text: `DST : cap opposé au sens de circulation de la ${KIND_TXT[info.kind]} (R10b)` });
+      cond.push({ id: 'tss-wrong', cat: 'warning', text: `DST : cap opposé au sens de circulation de la ${kindTxt(info.kind)} (R10b)` });
     } else if (dev >= 45 && dev <= 135) {
       const pd = perpDev(o.hdg, info.dir);
       if (!w.cur || w.cur.lane !== name) w.cur = { lane: name, maxDev: 0, t: 0 };
@@ -85,6 +89,8 @@ export function navStep(dt: number): void {
       w.sep += dt;
       cond.push({ id: 'tss-sep', cat: 'caution', text: 'DST : navigation dans une zone de séparation (R10e)' });
     }
+  } else if (info.kind === 'prec') {
+    w.prec += dt;
   } else if (info.kind === 'itz') {
     w.itz += dt;
     cond.push({ id: 'tss-itz', cat: 'caution', text: 'DST : zone de navigation côtière (R10d)' });
@@ -101,12 +107,13 @@ export function tssReport(): { pen: number; m: [ 'ok' | 'warn' | 'bad' | 'info',
   if (w.wrong > 30) { pen += 30; m.push(['bad', `Navigation à contresens dans une voie pendant ${fMin(w.wrong)} : contraire à R10(b)(i).`]); }
   if (w.oblique > 300) { pen += 5; m.push(['warn', `Route oblique dans une voie pendant ${fMin(w.oblique)} : suivre la direction générale du trafic (R10(b)(i)), ou traverser à angle droit (R10(c)).`]); }
   for (const c of cr.filter((x) => x.t > 60)) {
-    const v = `Traversée de la voie ${c.lane} : cap à ${Math.round(c.maxDev)}° au plus de la perpendiculaire`;
+    const v = `Traversée de la ${laneTxt(c.lane)} : cap à ${Math.round(c.maxDev)}° au plus de la perpendiculaire`;
     if (c.maxDev <= 15) m.push(['ok', `${v}, conforme à R10(c).`]);
     else if (c.maxDev <= 30) { pen += 5; m.push(['warn', `${v} : R10(c) demande un cap aussi proche que possible de la perpendiculaire.`]); }
     else { pen += 10; m.push(['bad', `${v} : traversée trop oblique, contraire à R10(c).`]); }
   }
   if (w.sep > 30) { pen += 10; m.push(['warn', `Présence dans une zone de séparation pendant ${fMin(w.sep)} sans la traverser : R10(e).`]); }
+  if (w.prec > 60) m.push(['info', `Zone de prudence traversée pendant ${fMin(w.prec)} : naviguer avec une prudence particulière, en suivant le sens de circulation recommandé s'il existe (R10 et mesures d'organisation du trafic de l'OMI).`]);
   if (w.itz > 60) { pen += 5; m.push(['warn', `Zone de navigation côtière utilisée pendant ${fMin(w.itz)} : R10(d), un navire de cette taille doit utiliser la voie adjacente.`]); }
   return { pen, m };
 }

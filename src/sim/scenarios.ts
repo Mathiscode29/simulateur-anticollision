@@ -3,8 +3,8 @@
  * Chaque situation est construite à rebours : on choisit le type de rencontre, le TCPA (min) et le CPA visé,
  * puis on place la cible pour que le mouvement relatif passe au CPA voulu. Le rôle obtenu est vérifié par roleOf.
  * Une rencontre peut être prévue après un point tournant de la route (référence « porteur virtuel » au point).
- * Exercices du Pas-de-Calais : position de départ et points tournants géographiques (WGS 84), trafic qui suit
- * les voies du DST (laneShip, laneMeet, laneAhead, laneFill).
+ * Exercices sur carte réelle (Pas-de-Calais, détroit de Gibraltar) : position de départ et points tournants géographiques
+ * (WGS 84), trafic qui suit les voies du DST (laneShip, laneMeet, laneMeetRoute, laneAhead, laneAt, laneFill).
  */
 import { S, logE, newTssWatch, type Behaviour, type Env, type Route, type Target, type TargetType, type Visibility } from '../core/state';
 import { DEFAULT_SHIP, SHIPS, SHIP_NAMES, TELE, TELE_SEA, TT } from '../core/data';
@@ -21,9 +21,9 @@ export type Kind = 'headon' | 'gw' | 'so' | 'overtake' | 'overtaken' | 'fish' | 
 
 export interface Scenario {
   n: string; d: string;
-  /** 1 = fondamentaux, 2 = situations combinées, 3 = avancé, 4 = Pas-de-Calais (DST) */
-  lvl: 1 | 2 | 3 | 4;
-  /** Carte : large (défaut, cap initial aléatoire) ou Pas-de-Calais (départ et route géographiques imposés). */
+  /** 1 = fondamentaux, 2 = situations combinées, 3 = avancé, 4 = Pas-de-Calais (DST), 5 = détroit de Gibraltar (DST) */
+  lvl: 1 | 2 | 3 | 4 | 5;
+  /** Carte : large (défaut, cap initial aléatoire), Pas-de-Calais ou Gibraltar (départ et route géographiques imposés). */
   chart?: ChartKey;
   /** Départ [latitude, longitude] et points tournants géographiques (degrés décimaux, WGS 84). */
   start?: [number, number];
@@ -39,9 +39,11 @@ export interface Scenario {
 /** Référence de placement : porteur réel maintenant, ou porteur virtuel à un point tournant à l'instant t0 (s). */
 interface Ref { x: number; y: number; hdg: number; stw: number; vx: number; vy: number; t0: number }
 
-export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé', 4: 'Pas-de-Calais (DST, règle 10)' };
+export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé', 4: 'Pas-de-Calais (DST, règle 10)', 5: 'Détroit de Gibraltar (DST, règle 10)' };
 
 const dm = (d: number, m: number): number => d + m / 60;
+/** Longitude ouest : degrés et minutes → degrés décimaux négatifs. */
+const dmW = (d: number, m: number): number => -(d + m / 60);
 
 export const SCEN: Record<string, Scenario> = {
   // ----- Fondamentaux
@@ -149,6 +151,47 @@ export const SCEN: Record<string, Scenario> = {
       laneAhead('SW', -3, rnd(0.35, 0.5), 18.5);
       laneFill('NE', 5);
     } },
+
+  // ----- Détroit de Gibraltar (carte réelle, DST « In the Strait of Gibraltar »)
+  gib_west: { n: 'Transit vers l\'Atlantique (voie ouest)', lvl: 5, vis: 'good', chart: 'gib',
+    d: 'De Europa Point à Tarifa dans la voie ouest, contre le courant entrant : un navire lent à rattraper, un plus rapide qui vous rattrape, et les transbordeurs rapides Tarifa / Tanger qui coupent le DST.',
+    start: [dm(36, 0.45), dmW(5, 21.5)], wpts: [[dm(36, 0.2), dmW(5, 25.7)], [dm(35, 59.5), dmW(5, 28.6)], [dm(35, 57.8), dmW(5, 35.1)], [dm(35, 57.43), dmW(5, 36.5)], [dm(35, 57.4), dmW(5, 50.0)]],
+    env: { windFrom: 270, windKn: 18, curSet: 85, curKn: 1.8, night: false },
+    build() {
+      laneAhead('W', 4.2, pm(0, 0.12), 8);
+      laneAhead('W', -3, rnd(0.4, 0.6), 19);
+      const f = add('gw', rnd(15, 18), pm(0, 0.25), ownRef(), 27);
+      if (f) { f.name = 'Transbordeur rapide'; f.L = 90; }
+      const g = addAfterWp(4, 'so', rnd(8, 11), pm(0, 0.3), 25);
+      if (g) { g.name = 'Transbordeur rapide'; g.L = 100; g.beh = Math.random() < 0.5 ? 'late' : g.beh; }
+      laneFill('E', 5); laneFill('W', 2);
+    } },
+  gib_tanger: { n: 'Appareillage de Tanger-Med, de nuit', lvl: 5, vis: 'good', chart: 'gib',
+    d: 'Sortie de Tanger-Med vers l\'Atlantique : couper le flux montant vers la Méditerranée dans la zone de prudence, puis rallier la voie ouest. Feux de navires et phares de Tarifa, Carnero et Europa Point.',
+    start: [dm(35, 54.6), dmW(5, 30.4)], wpts: [[dm(35, 57.6), dmW(5, 31.1)], [dm(35, 58.0), dmW(5, 35.0)], [dm(35, 57.45), dmW(5, 40.0)], [dm(35, 57.4), dmW(5, 50.0)]],
+    env: { windFrom: 80, windKn: 12, curSet: 85, curKn: 1.5, night: true },
+    build() {
+      laneMeetRoute('E', rnd(0.2, 0.45), rnd(13, 16));
+      laneMeetRoute('E', -rnd(0.5, 0.8), rnd(11, 14));
+      const j = toXY(dm(35, 58.0), dmW(5, 35.0));
+      laneAt('W', j, 3.2, pm(0.2, 0.4), rnd(13, 16));
+      laneAt('W', j, -2.5, rnd(0.3, 0.5), 9);
+      laneAt('W', j, -7, pm(0.2, 0.5), 18);
+      laneFill('E', 4);
+    } },
+  gib_alge: { n: 'Arrivée à Algeciras par brume de Levant', lvl: 5, vis: 'poor', chart: 'gib',
+    d: 'Venant de l\'Atlantique par la voie est, en brume : rattraper un navire lent, puis couper la voie ouest dans la zone de prudence est pour gagner la baie d\'Algeciras, avec un transbordeur Algeciras / Ceuta.',
+    start: [dm(35, 54.6), dmW(5, 40.0)], wpts: [[dm(35, 54.9), dmW(5, 36.5)], [dm(35, 55.5), dmW(5, 34.2)], [dm(35, 57.25), dmW(5, 27.8)], [dm(35, 57.9), dmW(5, 24.5)], [dm(36, 1.6), dmW(5, 23.3)], [dm(36, 5.0), dmW(5, 23.0)]],
+    env: { windFrom: 90, windKn: 22, curSet: 80, curKn: 1.5, rain: false },
+    build() {
+      laneAhead('E', 3.4, pm(0, 0.12), 7.5);
+      laneAhead('E', -3, rnd(0.4, 0.6), 18);
+      laneMeetRoute('W', rnd(0.2, 0.4), rnd(12, 15));
+      laneMeetRoute('W', -rnd(0.4, 0.7), rnd(10, 13));
+      const f = addAfterWp(4, 'headon', rnd(4, 6), pm(0.3, 0.5), 24);
+      if (f) { f.name = 'Transbordeur rapide'; f.L = 95; }
+      laneFill('W', 4);
+    } },
 };
 
 // ---------------------------------------------------------------- trafic des voies du DST
@@ -156,7 +199,7 @@ export const SCEN: Record<string, Scenario> = {
 interface LaneOpt { type?: TargetType; dir?: 1 | -1; beh?: Behaviour }
 
 /** Navire qui suit une voie : abscisse s (NM) sur l'axe, décalage latéral off (NM, + = tribord du sens réglementaire). */
-export function laneShip(id: 'NE' | 'SW', s: number, off: number, spd: number, o: LaneOpt = {}): Target | null {
+export function laneShip(id: string, s: number, off: number, spd: number, o: LaneOpt = {}): Target | null {
   const l = laneOf(id);
   if (!l) return null;
   const p = pointAt(l.axis, clamp(s, 0, polyLength(l.axis))), n = vec(p.brg + 90, off), dir = o.dir ?? 1;
@@ -167,7 +210,7 @@ export function laneShip(id: 'NE' | 'SW', s: number, off: number, spd: number, o
 }
 
 /** Navire de voie placé à `ds` NM devant (ou derrière si < 0) le porteur le long de l'axe, décalé de `dOff` NM vers tribord. */
-export function laneAhead(id: 'NE' | 'SW', ds: number, dOff: number, spd: number, o: LaneOpt = {}): Target | null {
+export function laneAhead(id: string, ds: number, dOff: number, spd: number, o: LaneOpt = {}): Target | null {
   const l = laneOf(id);
   if (!l) return null;
   const me = S.own, p = projOnPolyline(l.axis, me.x, me.y), sgn = Math.abs(adiff(me.hdg, p.brg)) < 90 ? 1 : -1;
@@ -178,7 +221,7 @@ export function laneAhead(id: 'NE' | 'SW', ds: number, dOff: number, spd: number
  * Navire de voie qui passera, dans `Tmin` minutes, au point où le porteur coupe l'axe de la voie,
  * décalé de `miss` NM le long de la voie (> 0 : il passe devant le point de rencontre).
  */
-export function laneMeet(id: 'NE' | 'SW', Tmin: number, miss: number, spd: number, o: LaneOpt = {}): Target | null {
+export function laneMeet(id: string, Tmin: number, miss: number, spd: number, o: LaneOpt = {}): Target | null {
   const l = laneOf(id);
   if (!l) return null;
   const me = S.own, T = Tmin * 60, dir = o.dir ?? 1;
@@ -187,15 +230,50 @@ export function laneMeet(id: 'NE' | 'SW', Tmin: number, miss: number, spd: numbe
   return laneShip(id, pr.s + miss - vAlong * K2N * T, pr.d + pm(0, 0.15), spd, o);
 }
 
+/** Navire de voie placé à `ds` NM le long de l'axe à partir de la projection du point `p`, décalé de `dOff` NM vers tribord. */
+export function laneAt(id: string, p: { x: number; y: number }, ds: number, dOff: number, spd: number, o: LaneOpt = {}): Target | null {
+  const l = laneOf(id);
+  if (!l) return null;
+  const pr = projOnPolyline(l.axis, p.x, p.y);
+  return laneShip(id, pr.s + ds, pr.d + dOff, spd, o);
+}
+
+/**
+ * Comme laneMeet, mais au point où la ROUTE prévue du porteur (points tournants compris) coupe l'axe de la voie :
+ * le navire de voie y passe au moment où le porteur l'atteint, décalé de `miss` NM le long de la voie.
+ */
+export function laneMeetRoute(id: string, miss: number, spd: number, o: LaneOpt = {}): Target | null {
+  const l = laneOf(id), r = S.route, me = S.own;
+  if (!l || !r) return null;
+  const path = [{ x: me.x, y: me.y }, ...r.wps.slice(r.leg + 1)];
+  let acc = 0, hit: { x: number; y: number; d: number } | null = null;
+  for (let i = 0; i < path.length - 1 && !hit; i++) {
+    const a = path[i], b = path[i + 1], L = Math.hypot(b.x - a.x, b.y - a.y);
+    let best = Infinity;
+    for (let k = 0; k < l.axis.length - 1; k++) {
+      const c = l.axis[k], e = l.axis[k + 1], den = (b.x - a.x) * (e.y - c.y) - (b.y - a.y) * (e.x - c.x);
+      if (Math.abs(den) < 1e-12) continue;
+      const t = ((c.x - a.x) * (e.y - c.y) - (c.y - a.y) * (e.x - c.x)) / den, u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && t < best) best = t;
+    }
+    if (best <= 1) hit = { x: a.x + (b.x - a.x) * best, y: a.y + (b.y - a.y) * best, d: acc + L * best };
+    acc += L;
+  }
+  if (!hit) return null;
+  const T = (hit.d / Math.max(Math.hypot(me.vx, me.vy), 1)) * 3600, dir = o.dir ?? 1, pr = projOnPolyline(l.axis, hit.x, hit.y);
+  const g = gv(dir > 0 ? pr.brg : pr.brg + 180, spd, 0.035), u = vec(pr.brg, 1), vAlong = g.x * u.x + g.y * u.y;
+  return laneShip(id, pr.s + miss - vAlong * K2N * T, pr.d + pm(0, 0.15), spd, o);
+}
+
 /** Trafic de fond dans une voie : n navires répartis le long de l'axe, à distance du porteur et entre eux. */
-export function laneFill(id: 'NE' | 'SW', n: number): void {
+export function laneFill(id: string, n: number): void {
   const l = laneOf(id);
   if (!l) return;
   const L = polyLength(l.axis), me = S.own;
   for (let k = 0, placed = 0; k < 60 && placed < n; k++) {
     const s = rnd(0.5, L - 0.5), off = pm(0, 1.3), p = pointAt(l.axis, s), q = vec(p.brg + 90, off), x = p.x + q.x, y = p.y + q.y;
     if (Math.hypot(x - me.x, y - me.y) < 2.5 || S.targets.some((t) => Math.hypot(t.x - x, t.y - y) < 1)) continue;
-    if (depthAt(x, y) < 30 || tssAt(x, y).kind !== (id === 'NE' ? 'laneNE' : 'laneSW')) continue;
+    if (depthAt(x, y) < 30 || tssAt(x, y).kind !== `lane${id}`) continue;
     laneShip(id, s, off, rnd(10, 19), { type: Math.random() < 0.2 ? 'small' : 'power' });
     placed++;
   }
@@ -242,17 +320,17 @@ function ownRef(): Ref {
 }
 
 /** Place une rencontre `Tmin` minutes après le passage au point tournant `wp` de la route. */
-export function addAfterWp(wp: number, kind: Kind, Tmin: number, off: number): Target | null {
+export function addAfterWp(wp: number, kind: Kind, Tmin: number, off: number, spd?: number): Target | null {
   const r = S.route, o = S.own;
-  if (!r || wp >= r.wps.length - 1) return add(kind, Tmin, off);
+  if (!r || wp >= r.wps.length - 1) return add(kind, Tmin, off, ownRef(), spd);
   const p = r.wps[wp], q = r.wps[wp + 1], hdg = brgOf(q.x - p.x, q.y - p.y);
   const sog = Math.max(Math.hypot(o.vx, o.vy), 1), t0 = (Math.hypot(p.x - o.x, p.y - o.y) / sog) * 3600;
   const w = vec(hdg, o.stw), c = vec(S.env.curSet, S.env.curKn);
-  return add(kind, t0 / 60 + Tmin, off, { x: p.x, y: p.y, hdg, stw: o.stw, vx: w.x + c.x, vy: w.y + c.y, t0 });
+  return add(kind, t0 / 60 + Tmin, off, { x: p.x, y: p.y, hdg, stw: o.stw, vx: w.x + c.x, vy: w.y + c.y, t0 }, spd);
 }
 
-/** Place une cible du type demandé pour un rapprochement au CPA `off` (NM) dans `Tmin` minutes. */
-export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef()): Target | null {
+/** Place une cible du type demandé pour un rapprochement au CPA `off` (NM) dans `Tmin` minutes (vitesse imposée `spdOver`, kn). */
+export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef(), spdOver?: number): Target | null {
   const o = ref, H = o.hdg, os = o.stw, me = S.own;
   const want = ({ headon: 'headon', gw: 'giveway', so: 'standon', overtake: 'overtaking', overtaken: 'overtaken' } as Record<string, string>)[kind];
   const rMax = ref.t0 > 0 ? 14 : 11.5;
@@ -270,6 +348,7 @@ export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef()):
       case 'sail': type = 'sail'; hdg = H + pm(40, 140); spd = rnd(4, 7); break;
       default: type = Math.random() < 0.25 ? 'small' : 'power'; hdg = rnd(0, 360); spd = rnd(8, 20);
     }
+    if (spdOver !== undefined) spd = spdOver;
     hdg = n360(hdg);
     const tv = gv(hdg, spd, wOf(type)), T = Tmin * 60, dT = T - o.t0;
     if (dT < 120) continue;

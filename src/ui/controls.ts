@@ -451,7 +451,7 @@ function initEcdisInput(ec: HTMLCanvasElement): void {
 
 export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): void {
   initEcdisInput(ec);
-  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
+  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4, 5].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
     + Object.entries(SCEN).filter(([, s]) => s.lvl === l).map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('')).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
   setPalette(R().palette);

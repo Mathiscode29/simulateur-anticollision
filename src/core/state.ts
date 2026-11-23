@@ -42,7 +42,7 @@ export interface TargetAI {
 export interface Fault {
   kind: 'engine' | 'steering' | 'collision';
   active: boolean; at?: number; until?: number;
-  prev?: TargetType; jam?: number; lane?: 'NE' | 'SW';
+  prev?: TargetType; jam?: number; lane?: string;
 }
 
 /** Dernier message de position AIS reçu (classe A ou B). */
@@ -60,7 +60,7 @@ export interface Target {
   vname: string;
   fault?: Fault;
   /** Navire qui suit une voie du DST : voie, sens (1 = sens réglementaire, −1 = contresens), décalage latéral (NM). */
-  lane?: 'NE' | 'SW'; laneDir?: 1 | -1; laneOff?: number;
+  lane?: string; laneDir?: 1 | -1; laneOff?: number;
 }
 
 export interface TrialResult { cpa: number; tcpa: number; px: number; py: number; rvx: number; rvy: number }
@@ -90,8 +90,8 @@ export interface Encounter {
 
 /** Situation du porteur vis-à-vis du DST (règle 10) : temps cumulés (s) et traversées. */
 export interface TssWatch {
-  kind: 'none' | 'laneNE' | 'laneSW' | 'sep' | 'itz'; t: number;
-  inLane: number; wrong: number; oblique: number; sep: number; itz: number;
+  kind: string; t: number;
+  inLane: number; wrong: number; oblique: number; sep: number; itz: number; prec: number;
   crossings: { lane: string; maxDev: number; t: number }[];
   cur: { lane: string; maxDev: number; t: number } | null;
 }
@@ -194,7 +194,7 @@ export interface State {
 }
 
 export function newTssWatch(): TssWatch {
-  return { kind: 'none', t: 0, inLane: 0, wrong: 0, oblique: 0, sep: 0, itz: 0, crossings: [], cur: null };
+  return { kind: 'none', t: 0, inLane: 0, wrong: 0, oblique: 0, sep: 0, itz: 0, prec: 0, crossings: [], cur: null };
 }
 
 function defaultOwn(): OwnShip {

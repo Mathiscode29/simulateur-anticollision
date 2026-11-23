@@ -19,8 +19,7 @@
 import { S, type Target } from '../core/state';
 import { TELE } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
-import { toXY } from '../core/geo';
-import { CHART, NRAYS, depthAt } from '../sim/chart';
+import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
 import { dayShapes, navLights3D } from '../sim/visual';
 
 const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
@@ -186,14 +185,29 @@ function stars(yH: number): void {
   }
 }
 
-/** Relief schématique : collines basses et falaises connues (Douvres, South Foreland, Blanc-Nez, Gris-Nez). */
-const CLIFFS: [number, number, number][] = [[51.128, 1.335, 100], [51.142, 1.375, 90], [51.096, 1.235, 70], [50.925, 1.712, 130], [50.871, 1.585, 45]];
-let cliffXY: { x: number; y: number; h: number }[] | null = null, cliffKey = '';
+/**
+ * Relief schématique de la carte : ondulation de base et sommets notables (falaises de Douvres et caps au
+ * Pas-de-Calais ; Rocher de Gibraltar et Djebel Moussa au détroit de Gibraltar). Illustration, pas un MNT.
+ */
 function landHeight(x: number, y: number): { h: number; cliff: number } {
-  if (cliffKey !== CHART.key) { cliffKey = CHART.key; cliffXY = CHART.key === 'pdc' ? CLIFFS.map(([la, lo, h]) => ({ ...toXY(la, lo), h })) : []; }
-  let h = 18 + 30 * (0.5 + 0.5 * Math.sin(1.7 * x + 0.3) * Math.cos(1.3 * y - 0.7)), cl = 0;
-  for (const c of cliffXY!) { const k = Math.exp(-((x - c.x) ** 2 + (y - c.y) ** 2) / 2.2); h += c.h * k; cl = Math.max(cl, k); }
+  let h = CHART.landBase * (1 + 1.67 * (0.5 + 0.5 * Math.sin(1.7 * x + 0.3) * Math.cos(1.3 * y - 0.7))), cl = 0;
+  for (const c of CHART.relief) {
+    const k = Math.exp(-((x - c.x) ** 2 + (y - c.y) ** 2) / (2 * c.r * c.r));
+    h += c.h * k;
+    if (c.cliff) cl = Math.max(cl, k);
+  }
   return { h, cliff: cl };
+}
+
+/** Caractère d'un feu (Fl(n), Iso, Oc, Mo(A)) : allumé à l'instant t ? Rythmes simplifiés. */
+function charOn(light: string, t: number): boolean {
+  const per = Number(/(\d+(?:\.\d+)?)\s*s\b/.exec(light)?.[1] ?? 10), ph = ((t % per) + per) % per;
+  const grp = /Fl\s*\((\d+)\)/.exec(light);
+  if (grp) { const n = Number(grp[1]); return ph < n * 1.4 && ph % 1.4 < 0.5; }
+  if (/^Iso/.test(light)) return ph < per / 2;
+  if (/^Oc/.test(light)) return !(ph < 1.2 || (/Oc\s*\(2\)/.test(light) && ph >= 2 && ph < 3.2));
+  if (/Mo\s*\(A\)/.test(light)) return ph < 0.5 || (ph >= 1 && ph < 2.5);
+  return ph < 0.6;
 }
 
 function drawCoast(sk: Sky, hf: number): void {
@@ -205,11 +219,18 @@ function drawCoast(sk: Sky, hf: number): void {
     if (Math.abs(rel) > hf / 2 + step) continue;
     const r0 = co.r0[i];
     if (!(r0 < 40)) continue;
-    const d = r0 * NM, hx = co.ox + Math.sin(b * D2R) * r0, hy = co.oy + Math.cos(b * D2R) * r0, lh = landHeight(hx, hy);
-    const f = d * Math.cos(rel * D2R);
+    const d = r0 * NM, sb = Math.sin(b * D2R), cb = Math.cos(b * D2R), hx = co.ox + sb * r0, hy = co.oy + cb * r0, cr = Math.cos(rel * D2R);
+    const f = d * cr;
     if (f < 50) continue;
-    const top = lh.h - EYE - (d * d) / (2 * RE), base = -EYE - (d * d) / (2 * RE);
-    const yT = cam.cy - (top / f) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
+    // ligne de crête : élévation angulaire maximale le long du rayon, sur la terre traversée (relief en retrait de la côte)
+    let lh = landHeight(hx, hy), el = (lh.h - EYE - (d * d) / (2 * RE)) / d;
+    const rEnd = Math.min(co.r1[i], r0 + 4);
+    for (let r = r0 + 0.25; r < rEnd; r += 0.25) {
+      const q = landHeight(co.ox + sb * r, co.oy + cb * r), dd = r * NM, e = (q.h - EYE - (dd * dd) / (2 * RE)) / dd;
+      if (e > el) { el = e; lh = q; }
+    }
+    const base = -EYE - (d * d) / (2 * RE);
+    const yT = cam.cy - (el / cr) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
     if (yT >= yB) continue;
     const x0 = W / 2 + Math.tan((rel - step / 2) * D2R) * cam.F, x1 = W / 2 + Math.tan((rel + step / 2) * D2R) * cam.F;
     const v = veil(d, sk.vis);
@@ -421,6 +442,7 @@ function drawMarks(sk: Sky, bf: number): void {
   const cols: Record<string, string[]> = { N: ['#f4d000', '#111'], S: ['#111', '#f4d000'], E: ['#111', '#f4d000', '#111'], W: ['#f4d000', '#111', '#f4d000'], special: ['#f4d000'], safe: ['#c81e1e', '#f0f0f0'] };
   for (const m of CHART.marks) {
     const dx = m.x * NM - cam.ex, dy = m.y * NM - cam.ey, d = Math.hypot(dx, dy);
+    if (m.kind === 'lh') { lighthouse(m, dx, dy, d, sk); continue; }
     if (d > 13 * NM) continue;
     const v = veil(d, sk.vis), ph = m.id.charCodeAt(0) * 0.37 + m.id.length;
     const bob = m.kind === 'lv' ? hs * 0.08 * Math.sin(S.t * 0.5 + ph) : hs * 0.18 * Math.sin(S.t * 1.25 + ph);
@@ -452,10 +474,27 @@ function drawMarks(sk: Sky, bf: number): void {
     }
     const lit = m.kind === 'special' ? 'Y' : 'W';
     const a = lightAlpha(d, m.kind === 'lv' ? 12 : 4, sk);
-    if (a > 0 && flashOn(m.kind, m.id)) {
+    if (a > 0 && (m.light ? charOn(m.light, S.t + m.id.length * 1.3) : flashOn(m.kind, m.id))) {
       const q = proj(dx, dy, zl);
       if (q) { reflect(proj(dx, dy, 0), q, LIGHT[lit], a); glow(q[0], q[1], LIGHT[lit], a, m.kind === 'lv' ? 1.5 : 1); }
     }
+  }
+}
+
+/**
+ * Phare à terre : tour blanche de jour (à moins de 8 NM), feu de grande portée la nuit. Le feu est caché par la terre
+ * située devant lui (rayons de côte) et sous l'horizon au-delà de sa portée géographique (élévation du feu et de l'œil).
+ */
+function lighthouse(m: (typeof CHART.marks)[number], dx: number, dy: number, d: number, sk: Sky): void {
+  const z = m.elev ?? 40, dNM = d / NM, b = brgOf(dx, dy), co = S.coast;
+  if (co && co.r0[rayIndex(b)] < dNM - 0.6) return;
+  if (dNM > 2.08 * (Math.sqrt(z) + Math.sqrt(EYE))) return;
+  const v = veil(d, sk.vis), stub = { x: m.x, y: m.y, hdg: 0 };
+  if (!sk.night && v < 0.95 && dNM < 8) solid(stub, box(-3, 3, 3, z - 18, z + 2), mix(hex('#eeeeea'), sk.hor, v));
+  const a = lightAlpha(d, m.range ?? 15, sk);
+  if (a > 0 && charOn(m.light ?? 'Fl 10s', S.t + m.id.length * 1.7)) {
+    const q = proj(dx, dy, z);
+    if (q) glow(q[0], q[1], LIGHT.W, a, 1.6);
   }
 }
 
