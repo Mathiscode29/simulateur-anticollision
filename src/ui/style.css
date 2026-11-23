@@ -99,9 +99,10 @@ canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: 
 .grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px }
 .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px }
 .teleBox { display: flex; gap: 10px; align-items: stretch }
+.teleCv { flex: 1; min-width: 0; position: relative }
 .tele { display: grid; grid-template-columns: 1fr; gap: 4px; flex: 0 0 132px }
 .tele button { padding: 5px 6px; font-size: 12px; text-align: left }
-#telegraph { flex: 1; min-width: 0; height: 268px; border-radius: 10px; background: #15181c; box-shadow: inset 0 0 0 1px var(--ln); cursor: pointer; touch-action: none }
+#telegraph { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; background: #15181c; box-shadow: inset 0 0 0 1px var(--ln); cursor: pointer; touch-action: none }
 body.pal-night #telegraph { background: #050607 }
 .tele button.ast { border-color: #6b3a3a }
 input[type=range] { width: 100%; accent-color: var(--ac) }
@@ -156,8 +157,11 @@ details { margin: 8px 0 } summary { cursor: pointer; color: var(--ac); font-weig
 @media (max-width: 1200px) { header [data-seg=view] button { padding: 4px 5px } .bt { display: none } }
 
 /* indicateur d'angle de barre (onglet Barre) */
-.rudRow { flex-wrap: nowrap }
-.rudRow .lbl { min-width: 0; width: auto; flex: none }
-.rudRow .seg { flex-wrap: nowrap; flex: none }
-#rudInd { flex: none; width: 132px; height: 132px; margin-left: auto; border-radius: 10px; background: #15181c; box-shadow: inset 0 0 0 1px var(--ln) }
-body.pal-night #rudInd { background: #050607 }
+.modeHead { display: flex; justify-content: center; margin: 4px 0 8px }
+.modeHead .seg { flex-wrap: nowrap; width: 100% }
+.modeHead .seg button { flex: 1; padding: 9px 6px; font-size: 14px; font-weight: 600; letter-spacing: .02em }
+.dials { display: flex; gap: 10px; justify-content: center; margin-bottom: 6px }
+.dials canvas { flex: 1; max-width: 200px; aspect-ratio: 1; border-radius: 10px; background: #15181c; box-shadow: inset 0 0 0 1px var(--ln) }
+body.pal-night .dials canvas { background: #050607 }
+
+#nav b .sub { display: block; font-size: 11px; font-weight: 500; color: var(--dm) }

@@ -1,7 +1,7 @@
 /** Interface : commandes passerelle, réglages radar et ECDIS, vues, alertes, table des cibles, bilan, clavier et souris. */
 import { S, logE, type Compliance, type Faults, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
-import { brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
+import { adiff, brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
 import { LEVELS, SCEN, applyScenarioEnv, newScenario } from '../sim/scenarios';
 import { legData } from '../sim/route';
 import { ACQ_TIME, STABLE_TIME, SWP, acquire, cancelTrack, seaLevel, trialRemaining } from '../sim/radar';
@@ -328,7 +328,11 @@ export function upd(): void {
   $('play').textContent = S.paused ? '▶' : '⏸';
   const sog = Math.hypot(o.vx, o.vy);
   $('nHdg').textContent = o.hdg.toFixed(1) + '°';
-  $('nCog').textContent = (sog > 0.2 ? brgOf(o.vx, o.vy).toFixed(1) : '---') + '°';
+  {
+    // dérive totale (vent + courant) : angle entre le cap et la route fond
+    const cog = brgOf(o.vx, o.vy), dr = adiff(cog, o.hdg);
+    $('nCog').innerHTML = sog > 0.2 ? `${cog.toFixed(1)}° <span class="sub">dérive ${Math.abs(dr) < 0.05 ? '0,0' : (dr < 0 ? 'Bd ' : 'Td ') + Math.abs(dr).toFixed(1).replace('.', ',')}°</span>` : '---';
+  }
   $('nStw').textContent = o.stw.toFixed(1) + ' kn';
   $('nSog').textContent = sog.toFixed(1) + ' kn';
   $('nRud').textContent = fmtR(o.rud) + '°';

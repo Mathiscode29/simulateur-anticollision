@@ -13,7 +13,7 @@
  *   mouvements de plate-forme (roulis, tangage) d'amplitude modeste pour un VLCC.
  * - Feux de nuit avec halo et reflet sur l'eau, éclairage des emménagements et projecteurs de pont des chalutiers,
  *   vague d'étrave et sillage ; bouées avec voyants et rythmes IALA simplifiés, qui dansent à la houle.
- * - Console d'instruments (répétiteur gyro, axiomètre, indicateur de giration, loch, machine, anémomètre, sondeur).
+ * - Console d'instruments (répétiteur gyro, axiomètre, indicateur de taux de giration ROT, loch, machine, anémomètre, sondeur).
  * Niveau de détail volontairement limité pour rester fluide.
  */
 import { S, type Target } from '../core/state';
@@ -644,7 +644,7 @@ function instruments(bf: number): void {
   title(x, 'GYRO');
   // 2. axiomètre, 3. indicateur de giration
   arcDial((x += gap), o.rud, 35, 5, 'BARRE', '°');
-  arcDial((x += gap), o.rot * 60, 30, 5, 'GIRATION', '°/mn');
+  arcDial((x += gap), o.rot * 60, 30, 5, 'ROT', '°/mn');
   // 4. loch
   const sog = Math.hypot(o.vx, o.vy), cog = sog > 0.2 ? n360(brgOf(o.vx, o.vy)) : o.hdg;
   lcd((x += gap), [`VS ${o.stw.toFixed(1)} kn`, `VF ${sog.toFixed(1)} kn`, `RF ${cog.toFixed(0)}°`], 'LOCH / GNSS');

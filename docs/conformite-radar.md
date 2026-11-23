@@ -45,7 +45,7 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 |---|---|---|
 | Cible en acquisition : segments de cercle ; en acquisition automatique : segments épais rouges clignotants jusqu'à l'acquittement | ✅ | |
 | Cible suivie : cercle avec vecteur | ✅ | |
-| Navire porteur : ligne de foi et vecteur distincts | ✅ | Ligne de foi fine blanche ; vecteur du porteur épais vert avec pointe, repères de minute et libellé COG (sol) ou CTW (eau). |
+| Navire porteur : ligne de foi et vecteur distincts | ✅ | Ligne de foi blanche ; vecteur du porteur gris fin à pointe : route fond (stabilisation sol, courant compris) ou route surface (stabilisation eau, dérive due au vent comprise). Dérive affichée sous la route fond. |
 | Cible dangereuse : cercle épais rouge, clignotant jusqu'à l'acquittement | ✅ | |
 | Cible perdue : traits épais en travers du cercle, clignotants jusqu'à l'acquittement | ✅ | |
 | Cible sélectionnée : carré indiqué par ses coins | ✅ | |

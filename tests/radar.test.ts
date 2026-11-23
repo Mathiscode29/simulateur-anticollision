@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { S } from '../src/core/state';
-import { brgOf } from '../src/core/util';
+import { adiff, brgOf, n360 } from '../src/core/util';
 import { applyScenarioEnv, newScenario } from '../src/sim/scenarios';
 import { DT, simStep } from '../src/sim/loop';
 import { SWP } from '../src/sim/radar';
@@ -55,5 +55,19 @@ describe('balayage continu', () => {
     for (let k = 0; k < 60; k++) simStep();
     expect(S.clutter.length).toBeGreaterThan(0);
     for (const p of S.clutter) expect(S.t - p.t).toBeLessThanOrEqual(SWP + DT + 1e-9);
+  });
+});
+
+describe('vecteurs du porteur', () => {
+  it('le vecteur surface comprend la dérive due au vent ; le vecteur fond y ajoute le courant', async () => {
+    const { ownWater } = await import('../src/sim/physics');
+    start('r14');
+    S.targets = [];
+    Object.assign(S.env, { windFrom: n360(S.own.hdg + 90), windKn: 35, curKn: 1.5, curSet: n360(S.own.hdg + 90) });
+    for (let k = 0; k < 4 * 600; k++) simStep(); // 10 min, régime établi
+    const w = ownWater(), ctw = brgOf(w.x, w.y), cog = brgOf(S.own.vx, S.own.vy);
+    // vent de tribord : dérive sur bâbord (route surface à gauche du cap) ; courant portant à tribord : route fond à droite
+    expect(adiff(ctw, S.own.hdg)).toBeLessThan(-0.2);
+    expect(adiff(cog, ctw)).toBeGreaterThan(2);
   });
 });

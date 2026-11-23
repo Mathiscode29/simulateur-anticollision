@@ -32,14 +32,14 @@ src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
             outside.ts (vue extérieure canvas 2D en perspective : regard ± 90°, jumelles, horizon, brume, nuit, côte, cibles et feux,
             état de la mer, roulis / tangage, bouées, console d'instruments),
-            rudder.ts (indicateur d'angle de barre de l'onglet Barre : angle réel et ordonné), telegraph.ts (transmetteur d'ordres à manette, réponse machine),
+            rudder.ts (répétiteurs de l'onglet Barre : angle de barre réel et ordonné, ROT), telegraph.ts (transmetteur d'ordres vertical à manette, réponse machine),
             controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
             trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D et marques de jour),
-            debrief.test.ts (enregistrement, interpolation, moments clés), radar.test.ts (datation des échos, balayage continu)
+            debrief.test.ts (enregistrement, interpolation, moments clés), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md, carte-gibraltar.md (sources et limites des cartes)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)

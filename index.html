@@ -36,7 +36,7 @@
       <div><small>V SURFACE (LOCH)</small><b id="nStw">—</b></div>
       <div><small>V FOND (GNSS)</small><b id="nSog">—</b></div>
       <div><small>BARRE</small><b id="nRud">—</b></div>
-      <div><small>GIRATION</small><b id="nRot">—</b></div>
+      <div><small>ROT</small><b id="nRot">—</b></div>
       <div><small>CAP ORDONNÉ</small><b id="nCmd">—</b></div>
       <div><small>MACHINE</small><b id="nTel">—</b></div>
       <div><small>ÉCART ROUTE (XTE)</small><b id="nXte">—</b></div>
@@ -65,7 +65,8 @@
   </div>
 
   <section class="tab on" id="t-barre">
-    <div class="row rudRow"><span class="lbl">Mode</span><div class="seg" data-seg="ap"><button data-v="1">Pilote auto</button><button data-v="0">Barre manuelle</button></div><canvas id="rudInd" title="Indicateur d'angle de barre : aiguille = angle réel, repère blanc = ordre"></canvas></div>
+    <div class="modeHead"><div class="seg" data-seg="ap"><button data-v="1">Pilote auto</button><button data-v="0">Barre manuelle</button></div></div>
+    <div class="dials"><canvas id="rudInd" title="Angle de barre : aiguille = angle réel, repère blanc = ordre"></canvas><canvas id="rotInd" title="Taux de giration (ROT), °/min"></canvas></div>
     <div id="apBox">
       <div class="row big">Cap ordonné <b id="cmdTxt">000</b>°</div>
       <div class="grid6">
@@ -82,7 +83,7 @@
       </div>
     </div>
     <h4>Transmetteur d'ordres</h4>
-    <div class="teleBox"><div class="tele" id="tele"></div><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div>
+    <div class="teleBox"><div class="tele" id="tele"></div><div class="teleCv"><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div></div>
   </section>
 
   <section class="tab" id="t-radar">

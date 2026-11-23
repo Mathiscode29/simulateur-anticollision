@@ -37,9 +37,10 @@ export function gv(hdg: number, stw: number, windage: number): Vec {
 }
 
 /** Vecteur surface du porteur tel que mesuré par gyro + loch (sans dérive au vent). */
+/** Vitesse surface du porteur (kn), dérive due au vent comprise (vitesse transversale v du modèle MMG). */
 export function ownWater(): Vec {
-  const o = S.own;
-  return vec(o.hdg, o.stw);
+  const o = S.own, f = vec(o.hdg, o.u / MS), s = vec(o.hdg + 90, o.v / MS);
+  return { x: f.x + s.x, y: f.y + s.y };
 }
 
 export function stepOwn(dt: number): void {

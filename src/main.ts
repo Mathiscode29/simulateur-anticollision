@@ -18,7 +18,7 @@ initRender(canvas);
 initEcdis(ecdis);
 initOutside(document.getElementById('outside') as HTMLCanvasElement);
 initDebrief(document.getElementById('debrief') as HTMLCanvasElement);
-initRudder(document.getElementById('rudInd') as HTMLCanvasElement);
+initRudder(document.getElementById('rudInd') as HTMLCanvasElement, document.getElementById('rotInd') as HTMLCanvasElement);
 initTelegraph(document.getElementById('telegraph') as HTMLCanvasElement);
 upd();
 setInterval(upd, 250);
