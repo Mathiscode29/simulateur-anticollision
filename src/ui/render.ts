@@ -321,7 +321,7 @@ export function draw(): void {
   const assoc = new Map<number, number>();
   if (S.ecdis.aisRadar) {
     for (const tr of S.tracks) { const t = aisAssociated(tr); if (t) assoc.set(t.id, tr.n); }
-    ctx.strokeStyle = pal.sym; ctx.lineWidth = 1.2;
+    ctx.strokeStyle = pal.vec; ctx.lineWidth = 1.2;
     for (const t of S.targets) {
       if (!t.ais?.rep || assoc.has(t.id)) continue;
       const p = aisPos(t)!, q = Wp(p.x, p.y);
@@ -339,7 +339,7 @@ export function draw(): void {
     const q = Wp(tr.est.x, tr.est.y);
     if (Math.hypot(q[0] - cx, q[1] - cy) > Rr + 20) continue;
     const dangerFlash = tr.danger && isUnackedDanger(tr.n), lostFlash = tr.state === 'LOST' && isUnackedLost(tr.n);
-    const col = tr.state === 'LOST' ? pal.lost : tr.danger ? pal.danger : pal.sym;
+    const col = tr.state === 'LOST' ? pal.lost : tr.danger ? pal.danger : pal.vec; // cibles en vert, comme leur vecteur
     ctx.strokeStyle = col; ctx.fillStyle = col;
     // positions passées
     if (R.pastMin > 0 && tr.state !== 'ACQ') {
