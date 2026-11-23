@@ -34,7 +34,11 @@ describe('alertes radar (MSC.192(79) 5.29)', () => {
     ackAlert(a!.id);
     expect(isUnackedDanger(n)).toBe(false);
     run(2);
-    expect(S.alerts.find((x) => x.id === a!.id)?.acked).toBe(true);
+    // tant que la condition dure, l'alarme reste affichée et acquittée ; si le CPA est repassé au-dessus de la limite
+    // entre-temps (cas limite du tirage aléatoire), une alarme acquittée et inactive disparaît normalement
+    const al = S.alerts.find((x) => x.id === a!.id), tr = S.tracks.find((t) => t.n === n);
+    if (tr?.danger) expect(al?.acked).toBe(true);
+    else expect(al === undefined || al.acked).toBe(true);
   });
 
   it('cible annulée : son alarme disparaît une fois acquittée', () => {
