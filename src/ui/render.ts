@@ -38,11 +38,11 @@ export function setSimFrac(f: number): void { frac = clamp(f, 0, DT); }
 /** Position du curseur sur le scope (pixels CSS), null hors du scope. */
 export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
 
-interface Pal { frame: string; ppi: string; echo: string; ring: string; scale: string; lbl: string; text: string; dim: string; sym: string; head: string; danger: string; lost: string; ebl: string; eblTxt: string; trial: string; own: string; zone: string; route: string }
+interface Pal { frame: string; ppi: string; echo: string; ring: string; scale: string; lbl: string; text: string; dim: string; sym: string; head: string; danger: string; lost: string; ebl: string; eblTxt: string; trial: string; own: string; zone: string; route: string; cog: string }
 export const PALETTES: Record<'DAY' | 'DUSK' | 'NIGHT', Pal> = {
-  DAY: { frame: '#d5dde4', ppi: '#0b2c4d', echo: '#ffd84a', ring: '#4f86ab', scale: '#25384a', lbl: '#a9c9e0', text: '#0d1b26', dim: '#4d6475', sym: '#33e6ff', head: '#ffffff', danger: '#ff2b2b', lost: '#ffb020', ebl: '#86ffbe', eblTxt: '#0a6b3a', trial: '#ff9f1c', own: '#ffffff', zone: '#c38bff', route: '#ff3b30' },
-  DUSK: { frame: '#020509', ppi: '#04182a', echo: '#ffd23f', ring: '#1f5d74', scale: '#8fb5cc', lbl: '#8fb5cc', text: '#bfe3f5', dim: '#7f9fb3', sym: '#5ff3ff', head: '#e8f4ff', danger: '#ff3b3b', lost: '#ffb020', ebl: '#7dffb0', eblTxt: '#7dffb0', trial: '#ff9f1c', own: '#e8f4ff', zone: '#b58cff', route: '#ff4646' },
-  NIGHT: { frame: '#000000', ppi: '#020406', echo: '#9a7414', ring: '#152a35', scale: '#4b5e6b', lbl: '#4b5e6b', text: '#6d7d88', dim: '#4a5862', sym: '#2c8796', head: '#7b8a95', danger: '#a51616', lost: '#8a5a10', ebl: '#3c7d58', eblTxt: '#3c7d58', trial: '#8a5a10', own: '#7b8a95', zone: '#5c4a80', route: '#8a1c1c' },
+  DAY: { frame: '#d5dde4', ppi: '#0b2c4d', echo: '#ffd84a', ring: '#4f86ab', scale: '#25384a', lbl: '#a9c9e0', text: '#0d1b26', dim: '#4d6475', sym: '#33e6ff', head: '#ffffff', danger: '#ff2b2b', lost: '#ffb020', ebl: '#86ffbe', eblTxt: '#0a6b3a', trial: '#ff9f1c', own: '#ffffff', zone: '#c38bff', route: '#ff3b30', cog: '#7dff4a' },
+  DUSK: { frame: '#020509', ppi: '#04182a', echo: '#ffd23f', ring: '#1f5d74', scale: '#8fb5cc', lbl: '#8fb5cc', text: '#bfe3f5', dim: '#7f9fb3', sym: '#5ff3ff', head: '#e8f4ff', danger: '#ff3b3b', lost: '#ffb020', ebl: '#7dffb0', eblTxt: '#7dffb0', trial: '#ff9f1c', own: '#e8f4ff', zone: '#b58cff', route: '#ff4646', cog: '#7dff4a' },
+  NIGHT: { frame: '#000000', ppi: '#020406', echo: '#9a7414', ring: '#152a35', scale: '#4b5e6b', lbl: '#4b5e6b', text: '#6d7d88', dim: '#4a5862', sym: '#2c8796', head: '#7b8a95', danger: '#a51616', lost: '#8a5a10', ebl: '#3c7d58', eblTxt: '#3c7d58', trial: '#8a5a10', own: '#7b8a95', zone: '#5c4a80', route: '#8a1c1c', cog: '#3f7f2a' },
 };
 
 export function initRender(canvas: HTMLCanvasElement): void {
@@ -286,8 +286,24 @@ export function draw(): void {
   // vecteur du porteur (vecteurs vrais)
   const vm = R.vecMin / 60;
   if (R.vec === 'TRUE') {
+    // vecteur route fond (GNSS) ou route surface (loch) : trait épais vert, pointe et repères de minute,
+    // pour ne pas le confondre avec la ligne de foi (fine, blanche)
     const v = R.stab === 'GND' ? { x: o.vx, y: o.vy } : ownWater(), q = P(v.x * vm, v.y * vm);
-    ctx.strokeStyle = pal.own; ctx.lineWidth = 1.8; line(ox, oy, q[0], q[1]);
+    const len = Math.hypot(q[0] - ox, q[1] - oy);
+    if (len > 4) {
+      const ux = (q[0] - ox) / len, uy = (q[1] - oy) / len;
+      ctx.strokeStyle = pal.ppi; ctx.lineWidth = 6; line(ox, oy, q[0], q[1]); // liseré sombre
+      ctx.strokeStyle = pal.cog; ctx.lineWidth = 3; line(ox, oy, q[0] - ux * 6, q[1] - uy * 6);
+      ctx.fillStyle = pal.cog; ctx.beginPath(); ctx.moveTo(q[0], q[1]);
+      ctx.lineTo(q[0] - ux * 11 - uy * 5, q[1] - uy * 11 + ux * 5); ctx.lineTo(q[0] - ux * 11 + uy * 5, q[1] - uy * 11 - ux * 5); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1.5;
+      for (let m = 1; m < R.vecMin; m++) { // repères de minute
+        const f = m / R.vecMin, px = ox + (q[0] - ox) * f, py = oy + (q[1] - oy) * f;
+        line(px - uy * 5, py + ux * 5, px + uy * 5, py - ux * 5);
+      }
+      ctx.font = `600 ${fs * 0.85}px ui-monospace,Menlo,monospace`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(R.stab === 'GND' ? 'COG' : 'CTW', q[0] + uy * 10 + ux * 4, q[1] - ux * 10 + uy * 4);
+    }
   }
   if (R.trial && R.vec === 'TRUE') {
     ctx.setLineDash([6, 4]); ctx.strokeStyle = pal.trial; ctx.lineWidth = 1.5;

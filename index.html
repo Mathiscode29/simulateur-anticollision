@@ -65,7 +65,7 @@
   </div>
 
   <section class="tab on" id="t-barre">
-    <div class="row rudRow"><span class="lbl">Mode</span><div class="seg" data-seg="ap"><button data-v="1">Pilote auto</button><button data-v="0">Barre manuelle</button></div><canvas id="rudInd" title="Indicateur d'angle de barre : aiguille = angle réel, repère bleu = ordre"></canvas></div>
+    <div class="row rudRow"><span class="lbl">Mode</span><div class="seg" data-seg="ap"><button data-v="1">Pilote auto</button><button data-v="0">Barre manuelle</button></div><canvas id="rudInd" title="Indicateur d'angle de barre : aiguille = angle réel, repère blanc = ordre"></canvas></div>
     <div id="apBox">
       <div class="row big">Cap ordonné <b id="cmdTxt">000</b>°</div>
       <div class="grid6">
@@ -78,12 +78,11 @@
       <div class="row big">Barre <b id="rudTxt">0</b></div>
       <input type="range" id="rudSl" min="-35" max="35" step="1" value="0">
       <div class="grid7" style="margin-top:6px">
-        <button data-act="rud" data-v="-35">B35</button><button data-act="rud" data-v="-20">B20</button><button data-act="rud" data-v="-10">B10</button><button data-act="rud" data-v="0">Zéro</button><button data-act="rud" data-v="10">T10</button><button data-act="rud" data-v="20">T20</button><button data-act="rud" data-v="35">T35</button>
+        <button data-act="rud" data-v="-35">Bd 35</button><button data-act="rud" data-v="-20">Bd 20</button><button data-act="rud" data-v="-10">Bd 10</button><button data-act="rud" data-v="0">Zéro</button><button data-act="rud" data-v="10">Td 10</button><button data-act="rud" data-v="20">Td 20</button><button data-act="rud" data-v="35">Td 35</button>
       </div>
     </div>
     <h4>Transmetteur d'ordres</h4>
-    <div class="tele" id="tele"></div>
-    <p class="dim small" id="shipInfo"></p>
+    <div class="teleBox"><div class="tele" id="tele"></div><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div>
   </section>
 
   <section class="tab" id="t-radar">
@@ -95,6 +94,7 @@
     <div class="row"><span class="lbl">Stabilisation</span><div class="seg" data-seg="stab"><button data-v="GND">Sol (GNSS)</button><button data-v="SEA">Eau (loch)</button></div></div>
     <div class="row"><span class="lbl">Sillages</span><div class="seg" data-seg="trail"><button data-v="OFF">Off</button><button data-v="REL">Rel.</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="trailMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button></div></div>
     <div class="row"><span class="lbl">Route prévue</span><div class="seg" data-seg="routeShow"><button data-v="1">Affichée</button><button data-v="0">Masquée</button></div><span class="lbl" style="min-width:0">Couloir</span><div class="seg" data-seg="xteLim"><button data-v="0.5">±0,5</button><button data-v="1">±1</button><button data-v="2">±2 NM</button></div></div>
+    <div class="row"><span class="lbl">AIS sur le radar</span><div class="seg" data-seg="aisRadar"><button data-v="1">Superposé</button><button data-v="0">Masqué</button></div></div>
     <div class="row"><span class="lbl">Positions passées</span><div class="seg" data-seg="pastMin"><button data-v="0">Off</button><button data-v="0.5">30 s</button><button data-v="1">1 min</button><button data-v="2">2 min</button></div></div>
     <h4>Vidéo</h4>
     <div class="row"><span class="lbl">Bande</span><div class="seg" data-seg="band"><button data-v="X">X (3 cm)</button><button data-v="S">S (10 cm)</button></div></div>
@@ -127,7 +127,6 @@
     <div class="row"><span class="lbl">Anticipation</span><div class="seg" data-seg="ecLook"><button data-v="3">3 min</button><button data-v="6">6 min</button><button data-v="12">12 min</button></div></div>
     <div class="row"><span class="lbl">Clic sur la carte</span><div class="seg" data-seg="ecTool"><button data-v="INFO">Info</button><button data-v="EBL">EBL/VRM</button><button data-v="ROUTE">Tracé de route</button></div></div>
     <div class="row"><span class="lbl">Couches</span><div class="seg" id="ecLayers"><button data-act="layer" data-v="tss">DST</button><button data-act="layer" data-v="depth">Fonds</button><button data-act="layer" data-v="names">Noms</button><button data-act="layer" data-v="ais">AIS</button><button data-act="layer" data-v="arpa">ARPA</button></div></div>
-    <div class="row"><span class="lbl">AIS sur le radar</span><div class="seg" data-seg="aisRadar"><button data-v="1">Superposé</button><button data-v="0">Masqué</button></div></div>
     <h4>Route</h4>
     <div class="row"><button data-act="routeNew" title="La route repart de la position du navire ; cliquez ensuite sur la carte (outil Tracé de route)">Nouvelle route depuis le navire</button><button data-act="routeUndo">Retirer le dernier WP</button><button data-act="routeCheck">Vérifier la route</button></div>
     <div class="row"><button data-act="ecClr">Effacer EBL/VRM</button></div>
@@ -142,7 +141,7 @@
     <div class="scgrid" data-seg="scen"></div>
     <p class="dim small" id="scDesc"></p>
     <h4>Navire</h4>
-    <p style="margin:4px 0">Pétrolier VLCC 320 m (KVLCC2), en charge, modèle hydrodynamique MMG.</p>
+    <p style="margin:4px 0" class="small" id="shipInfo"></p>
     <h4>Environnement</h4>
     <div class="row"><span class="lbl">Vent</span><span id="windTxt" style="flex:1"></span></div>
     <div class="row"><input type="range" id="wDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="wSpd" min="0" max="45" step="1" style="flex:1"></div>

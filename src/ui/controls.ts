@@ -253,7 +253,8 @@ function envTxt(): void {
   $('curTxt').textContent = `portant au ${p3(e.curSet)}°, ${e.curKn.toFixed(1)} kn`;
 }
 
-const fmtR = (v: number) => { v = Math.round(v); return v === 0 ? '0' : (v < 0 ? 'B' : 'T') + Math.abs(v); };
+/** Angle de barre au format des ordres : « Bd 10 », « Td 5 », « 0 ». */
+const fmtR = (v: number) => { v = Math.round(v); return v === 0 ? '0' : (v < 0 ? 'Bd ' : 'Td ') + Math.abs(v); };
 
 let reportShown: object | null = null;
 function renderReport(): void {
@@ -369,7 +370,7 @@ export function upd(): void {
   $('manBox').style.display = o.ap ? 'none' : '';
   $('cmdTxt').textContent = p3(o.cmdHdg);
   $('rudTxt').textContent = fmtR(o.manRud) + '°';
-  $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${o.ship.max} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`;
+  $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${String(o.ship.max).replace(".", ",")} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`;
   $('rngTxt').textContent = Rs.range + ' NM';
   $('trHTxt').textContent = p3(Rs.trialHdg) + '°';
   $('trSTxt').textContent = Rs.trialSpd + ' kn';

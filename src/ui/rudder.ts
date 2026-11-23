@@ -45,12 +45,12 @@ export function drawRudder(): void {
     if (big && v !== 0) { const q = pt(v, R + R * 0.42); ctx.fillText(String(Math.abs(v)), q[0], q[1]); }
   }
   const z = pt(0, R + R * 0.4); ctx.fillText('0', z[0], z[1]);
-  // repère de l'angle ordonné (triangle bleu sur l'intérieur de l'arc)
+  // repère de l'angle ordonné (triangle blanc sur l'intérieur de l'arc)
   const o = S.own, cmd = o.ap ? o.rudCmd ?? o.rud : o.manRud;
   {
     const a = ang(cmd), tip = pt(cmd, R - R * 0.12), l = pt(cmd, R + R * 0.05);
     const nx = Math.cos(a) * R * 0.09, ny = -Math.sin(a) * R * 0.09;
-    ctx.fillStyle = '#38cfff'; ctx.beginPath(); ctx.moveTo(tip[0], tip[1]); ctx.lineTo(l[0] + nx, l[1] + ny); ctx.lineTo(l[0] - nx, l[1] - ny); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(tip[0], tip[1]); ctx.lineTo(l[0] + nx, l[1] + ny); ctx.lineTo(l[0] - nx, l[1] - ny); ctx.closePath(); ctx.fill();
   }
   // aiguille : angle réel
   const n = pt(o.rud, R * 0.93);
@@ -60,6 +60,6 @@ export function drawRudder(): void {
   // lecture numérique
   const v = Math.abs(o.rud) < 0.05 ? 0 : o.rud;
   ctx.font = `700 ${Math.round(R * 0.26)}px ui-monospace,Menlo,monospace`; ctx.fillStyle = v < 0 ? '#ff5a5a' : v > 0 ? '#4fd872' : '#f2f2f2';
-  ctx.fillText(`${v < 0 ? 'B' : v > 0 ? 'T' : ''}${Math.abs(v).toFixed(1).replace('.', ',')}°`, cx, cy - R * 0.42);
+  ctx.fillText(`${v < 0 ? 'Bd ' : v > 0 ? 'Td ' : ''}${Math.abs(v).toFixed(1).replace('.', ',')}°`, cx, cy - R * 0.42);
   ctx.globalAlpha = 1;
 }
