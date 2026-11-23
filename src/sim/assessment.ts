@@ -111,6 +111,13 @@ export function evalEnc(e: Encounter, t: Target, unfinished: boolean): { pen: nu
     if (C && C.dir < 0 && r === 'standon' && C.tb > 247.5) { pen += 25; m.push(['bad', 'R17c : en croisement, ne pas venir sur bâbord pour un navire situé sur bâbord.']); }
     if (!A && !e.tgtActT && e.minR < 0.3) { pen += 25; m.push(['bad', "Ni lui ni vous n'avez manœuvré : R17b impose d'agir quand l'abordage ne peut plus être évité par le seul non privilégié."]); }
     if (!A && e.minR >= 0.5) m.push(['ok', 'Cap et vitesse maintenus comme navire privilégié : R17a(i).']);
+  } else if (r === 'anchor') {
+    // navire au mouillage : pas de règle de barre entre eux, le navire qui fait route l'évite (R2 bonne pratique, R8)
+    if (e.minR >= 0.5) m.push(['ok', 'Navire au mouillage paré avec une marge suffisante (R2, R8d).']);
+    if (e.crossedAhead && e.minR < 1) {
+      pen += 5;
+      m.push(['warn', "Passage sur l'avant d'un navire au mouillage à moins d'1 NM : bonne pratique (R2), passer sur son arrière, côté sous le vent ou aval du courant, pour ne pas être drossé sur lui ou sur sa chaîne."]);
+    }
   } else if (r === 'R19') {
     const tb = C ? C.tb : e.tb0, fwd = tb < 90 || tb > 270;
     if (!A && e.minR < 1) { pen += 25; m.push(['bad', 'Aucune manœuvre : en visibilité réduite, le navire qui détecte au radar une situation très rapprochée doit manœuvrer largement à temps (R19d).']); }
@@ -121,6 +128,13 @@ export function evalEnc(e: Encounter, t: Target, unfinished: boolean): { pen: nu
     }
     if (A && A.tcpa < 6 * 60) { pen += 10; m.push(['warn', `Manœuvre tardive (TCPA ${fMin(A.tcpa)}) : R19d demande d'agir « largement à temps ».`]); }
     if (fwd && e.minR < 1 && e.maxRed < 0.3) { pen += 5; m.push(['warn', "Navire sur l'avant du travers à moins d'1 NM sans réduction de vitesse : R19e (réduire au minimum de manœuvre, casser l'erre si besoin)."]); }
+  }
+  // R34a : signal de manœuvre quand les navires sont en vue (bonne visibilité), vérifié autour du premier changement de cap
+  if (C && r !== 'R19' && r !== 'anchor' && C.r <= 3) {
+    const want = C.dir > 0 ? 'C' : 'CC', near = S.snd.own.filter((s) => Math.abs(s.t - C.t) <= 90 && (s.pat === 'C' || s.pat === 'CC'));
+    if (near.some((s) => s.pat === want)) m.push(['ok', `Signal de manœuvre donné (R34a : ${want === 'C' ? 'un son bref, « je viens sur tribord »' : 'deux sons brefs, « je viens sur bâbord »'}).`]);
+    else if (near.length) { pen += 10; m.push(['bad', `Signal de manœuvre contraire au sens de l'abattée : R34a (${want === 'C' ? 'un son bref pour tribord' : 'deux sons brefs pour bâbord'}).`]); }
+    else m.push(['info', `R34a : votre changement de cap à ${C.r.toFixed(1)} NM, navires en vue, s'accompagne d'un signal au sifflet (${want === 'C' ? 'un son bref pour tribord' : 'deux sons brefs pour bâbord'}).`]);
   }
   if (unfinished) m.push(['info', "Situation non terminée au moment de l'évaluation."]);
   return { pen: Math.min(pen, 100), m };
@@ -155,13 +169,19 @@ export function finish(): void {
     const info = (t.ai.done || '') + (t.ai.state === 'avoid' ? t.ai.info || '' : '');
     items.push({
       tid: t.id, label: tLabel(t), name: t.name, L: t.L, role: ROLE_TXT[e.role] || e.role, msgs: res.m,
-      other: info ? info.replace(/ ; $/, '') : t.type === 'nuc' ? 'non maître de sa manœuvre, a dérivé' : 'a maintenu cap et vitesse',
+      other: info ? info.replace(/ ; $/, '') : t.type === 'nuc' ? 'non maître de sa manœuvre, a dérivé' : t.type === 'anchor' ? 'au mouillage' : 'a maintenu cap et vitesse',
     });
   }
   if (S.spdPoor[1] > 60) {
     const avg = S.spdPoor[0] / S.spdPoor[1], max = S.own.ship.max;
     if (avg > 0.75 * max) { pen += 10; global.push(['warn', `Vitesse moyenne ${avg.toFixed(1)} kn en brume (${Math.round((avg / max) * 100)} % du max) : R6 et R19b, vitesse de sécurité.`]); }
     else global.push(['ok', `Vitesse adaptée à la visibilité réduite (${avg.toFixed(1)} kn de moyenne).`]);
+  }
+  // R35a/b : signal de brume du porteur toutes les 2 minutes au plus
+  if (S.spdPoor[1] > 150) {
+    const miss = S.snd.missed;
+    if (miss > 60) { pen += miss > 0.5 * S.spdPoor[1] ? 15 : 8; global.push(['warn', `Signal de brume absent pendant ${fMin(miss)} en visibilité réduite : R35a (un son prolongé toutes les 2 minutes au plus en faisant route ; deux sons prolongés stoppé sans erre). Activez le signal automatique ou le sifflet.`]); }
+    else global.push(['ok', 'Signaux de brume émis en visibilité réduite (R35).']);
   }
   if (S.route) {
     const r = S.route, xte = Math.abs(currentXte() ?? 0);

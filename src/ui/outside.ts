@@ -23,6 +23,7 @@ import { TELE } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
 import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
 import { dayShapes, mastH, navLights3D, shipKind } from '../sim/visual';
+import { OWN, audibleRange, patText, sideOf } from '../sim/sound';
 
 export const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
 export const FOV = 62, FOV_BINO = 7.5;
@@ -683,6 +684,11 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
       }
     }
   }
+  // R30c : navire au mouillage de 100 m et plus, ponts éclairés
+  if (sk.night && t.type === 'anchor' && t.L >= 100 && S.env.vis !== 'poor' && d < 5 * NM) {
+    const k = clamp(1 - d / (5 * NM), 0, 1), fb = clamp(0.045 * t.L, 1.2, 12);
+    for (let a = -0.35; a <= 0.41; a += 0.15) { const q = proj(...shipPt(t, a * t.L, 0, fb + 6)); if (q) glow(q[0], q[1], LIGHT.A, 0.3 + 0.4 * k, 0.9); }
+  }
   // vague d'étrave et sillage
   if (t.stw > 3 && d < 4 * NM && v < 0.9 && !(sk.night && d > 0.5 * NM)) {
     const L = t.L, B = Math.max(3, L / 7), q = proj(...shipPt(t, L / 2, 0, 0.3));
@@ -887,6 +893,13 @@ function hud(hf: number, bf: number): void {
   ctx.textAlign = 'left';
   const info = [`REGARD ${p3(cam.yaw)}°T (${side})${look.binoc ? ' · JUMELLES 7×' : ''}`,
     `${S.env.night ? 'Nuit' : 'Jour'} · ${S.env.vis === 'poor' ? 'brume' : 'bonne visibilité'} · mer force ${bf} (≈ ${HS[bf].toString().replace('.', ',')} m) · œil à ${EYE} m`];
+  // dernier signal sonore entendu (8 s)
+  for (let k = S.snd.list.length - 1; k >= 0; k--) {
+    const s = S.snd.list[k];
+    if (S.t - s.t > 8) break;
+    if (s.src === OWN) { info.push(`♪ Votre sifflet : ${patText(s.pat)}`); break; }
+    if (Math.hypot(s.x - o.x, s.y - o.y) <= audibleRange(s.L)) { info.push(`♪ Entendu ${sideOf(s.x, s.y)} : ${patText(s.pat)}`); break; }
+  }
   if (hover !== null) {
     const rel = Math.atan((hover - W / 2) / cam.F) / D2R;
     info.push(`Relèvement curseur ${n360(cam.yaw + rel).toFixed(1)}°T`);
@@ -895,7 +908,6 @@ function hud(hf: number, bf: number): void {
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(8, top + 36, Math.max(...info.map((s) => ctx.measureText(s).width)) + 12, info.length * (fs + 4) + 6);
   ctx.fillStyle = 'rgba(230,240,245,.95)';
   info.forEach((s, i) => ctx.fillText(s, 14, top + 40 + i * (fs + 4)));
-  void o;
 }
 
 // ---------------------------------------------------------------- console d'instruments

@@ -24,6 +24,9 @@ export interface Vessel { x: number; y: number; hdg: number; stw: number; type: 
 
 export function roleOf(A: Vessel, B: Vessel, vis: Visibility): Role {
   if (vis === 'poor') return 'R19';
+  // navire au mouillage : pas de règle de barre et de route entre navires en vue ; celui qui fait route l'évite (R2, R8)
+  if (B.type === 'anchor') return 'anchor';
+  if (A.type === 'anchor') return 'standon18';
   const tb = n360(brgOf(B.x - A.x, B.y - A.y) - A.hdg); // B vu de A (relèvement relatif)
   const ob = n360(brgOf(A.x - B.x, A.y - B.y) - B.hdg); // A vu de B
   if (ob > 112.5 && ob < 247.5 && A.stw > B.stw) return 'overtaking';
@@ -44,7 +47,7 @@ export function pickBeh(): Behaviour {
   return r < 0.3 ? 'good' : r < 0.55 ? 'late' : r < 0.85 ? 'passive' : 'wrong';
 }
 
-const GIVE: ReadonlySet<Role> = new Set<Role>(['giveway', 'overtaking', 'headon', 'giveway18', 'R19']);
+const GIVE: ReadonlySet<Role> = new Set<Role>(['giveway', 'overtaking', 'headon', 'giveway18', 'R19', 'anchor']);
 
 /** Mobile évité : position et vitesse fond (kn). */
 interface Mover { x: number; y: number; vx: number; vy: number }
@@ -142,6 +145,7 @@ function emergency(t: Target): { u: Target | OwnShip; vs: number | undefined; c:
 
 /** Décision d'une cible (appelée toutes les 2 s simulées). */
 export function aiStep(t: Target): void {
+  if (t.type === 'anchor') return; // au mouillage : ni route ni manœuvre
   const o = S.own, a = t.ai, rx = o.x - t.x, ry = o.y - t.y, range = Math.hypot(rx, ry);
   const c = cpaOf(rx, ry, (o.vx - t.vx) * K2N, (o.vy - t.vy) * K2N);
   // navire qui suit une voie du DST : la route de base suit l'axe de la voie (avec son décalage latéral)

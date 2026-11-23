@@ -24,14 +24,15 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
             route.ts (route prévue, points tournants, écart latéral XTE),
             rules.ts (roleOf + IA des cibles : évitement du porteur et des autres cibles, R17a(ii), dernière minute),
             faults.ts (avaries machine/barre, abordage entre cibles, réparation, messages VHF/AIS nominatifs), assessment.ts (suivi des situations, évaluation, rapport),
-            scenarios.ts (25 exercices sur 5 niveaux, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
+            scenarios.ts (26 exercices sur 5 niveaux, navires au mouillage, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
             signaux de brume, feux et marques en 3D pour la vue extérieure), debrief.ts (enregistrement de l'exercice, analyse et moments clés
-            du débrief), loop.ts (pas de simulation)
+            du débrief), sound.ts (signaux sonores R34 / R35, annexe III : émission, portée d'audibilité, suivi R35), loop.ts (pas de simulation)
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
             ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD),
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
             outside.ts (vue extérieure 2D par défaut : caméra, regard ± 90°, jumelles, silhouettes en blocs par famille de navire,
             ciel / mer / relief en paliers, cadre de passerelle, bandeau, console d'instruments ; 30 i/s),
+            audio.ts (Web Audio : bips d'alerte, sifflet, cloche et gong spatialisés),
             rudder.ts (répétiteurs de l'onglet Barre : angle de barre réel et ordonné, ROT), telegraph.ts (transmetteur d'ordres à échelle −10…+10, manette, réponse machine),
             controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
@@ -39,7 +40,7 @@ tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sa
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
             trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D, marques de jour, familles de silhouettes),
-            debrief.test.ts (enregistrement, interpolation, moments clés), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
+            debrief.test.ts (enregistrement, interpolation, moments clés), mouillage-sons.test.ts (R30, R34, R35), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md, carte-gibraltar.md (sources et limites des cartes)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
@@ -65,7 +66,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 
 ## Références métier
 
-- RIPAM (règlement international pour prévenir les abordages en mer, COLREG 1972 amendé), règles 5 à 19, 35, annexe I.
+- RIPAM (règlement international pour prévenir les abordages en mer, COLREG 1972 amendé), règles 5 à 19, 30, 32 à 35, annexes I et III.
 - Radar/ARPA : résolution OMI MSC.192(79) et symboles SN.1/Circ.243/Rev.2 (grille de suivi : `docs/conformite-radar.md`, à mettre à jour à chaque évolution du radar). Norme d'essai IEC 62388 non consultée (payante).
 - Manœuvrabilité : méthode MMG standard (Yasukawa & Yoshimura, J. Mar. Sci. Technol. 20:37-52, 2015). **Un seul navire porteur** pour l'instant (KVLCC2) ; pas de sélecteur de navire tant qu'il n'y en a qu'un.
 - Prochain navire : porte-conteneurs KCS (230 m). Bloquant : obtenir un jeu complet de coefficients MMG publiés (piste : Yasukawa et al., J. Mar. Sci. Technol. 28:98-116, 2023, DOI 10.1007/s00773-022-00908-3, accès payant). Cibles de validation en essais libres (moyenne multi-bassins, Fr 0,26, barre 35°) : avance ≈ 2,9 L ; diamètre tactique ≈ 2,9 L sur tribord et 2,6 L sur bâbord ; vitesse en giration ≈ 0,46 U.

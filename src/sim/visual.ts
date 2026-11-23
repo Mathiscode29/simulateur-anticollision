@@ -3,8 +3,8 @@
  * Portées des feux (annexe I / R22) : ≥ 50 m : mât 6 NM, côtés 3, poupe 3, tous horizons 3.
  */
 import { S, type Target } from '../core/state';
-import { SPECIAL } from '../core/data';
 import { brgOf, n360 } from '../core/util';
+import { audibleRange, fogPattern, patText } from './sound';
 
 export function lights(t: Target, r: number, ob: number): string[] {
   const L = t.L, mk = t.stw > 0.3, res: string[] = [];
@@ -17,6 +17,10 @@ export function lights(t: Target, r: number, ob: number): string[] {
     case 'nuc': if (r <= arR) res.push('deux rouges superposés, tous horizons'); break;
     case 'ram': if (r <= arR) res.push('rouge-blanc-rouge superposés'); if (mk) mh(L >= 50 ? 2 : 1); break;
     case 'sail': break;
+    case 'anchor': // R30 : feux de mouillage ; ponts éclairés à partir de 100 m
+      if (r <= arR) res.push(L >= 50 ? 'deux feux blancs tous horizons, celui de l\'avant plus haut que celui de l\'arrière' : 'un feu blanc tous horizons');
+      if (L >= 100 && r <= 4) res.push('ponts éclairés');
+      return res;
     default: mh(L >= 50 ? 2 : 1);
   }
   if (mk) {
@@ -34,17 +38,14 @@ export function visual(t: Target): string {
   const o = S.own, rx = o.x - t.x, ry = o.y - t.y, r = Math.hypot(rx, ry), ob = n360(brgOf(rx, ry) - t.hdg);
   if (S.env.vis === 'poor' && r > 0.25) {
     let s = 'Non visible (brume).';
-    if (r < 2) {
-      const sig = SPECIAL.has(t.type) ? 'un son prolongé suivi de deux brefs' : t.stw > 0.3 ? 'un son prolongé' : 'deux sons prolongés';
-      s += ` Signal de brume entendu, direction incertaine : ${sig}.`;
-    }
+    if (r <= audibleRange(t.L)) s += ` Signal de brume entendu, direction incertaine : ${patText(fogPattern(t))}.`;
     return s;
   }
   if (!S.env.night) {
     const vr = t.L >= 100 ? 8 : t.L >= 50 ? 6 : t.L >= 20 ? 4 : 2.5;
     if (r > vr) return 'Hors de portée visuelle.';
     const asp = ob <= 180 ? `vert ${Math.round(ob)}°` : `rouge ${Math.round(360 - ob)}°`;
-    const sh = ({ fish: 'deux cônes pointes réunies', nuc: 'deux boules noires', ram: 'boule-bicône-boule' } as Record<string, string>)[t.type];
+    const sh = ({ fish: 'deux cônes pointes réunies', nuc: 'deux boules noires', ram: 'boule-bicône-boule', anchor: 'une boule noire sur l\'avant' } as Record<string, string>)[t.type];
     return `${t.name} d'environ ${t.L} m, aspect ${asp}${sh ? ' · marque : ' + sh : ''}.`;
   }
   const L = lights(t, r, ob);
@@ -84,6 +85,13 @@ export function navLights3D(t: Target, ob: number): Light3D[] {
       res.push({ a: 0.1 * L, b: 0, z: hM + 4, col: 'R', range: arR }, { a: 0.1 * L, b: 0, z: hM + 2, col: 'W', range: arR }, { a: 0.1 * L, b: 0, z: hM, col: 'R', range: arR });
       if (mk) mh(L >= 50);
       break;
+    case 'anchor': {
+      // R30 a : feu blanc tous horizons sur l'avant, et à l'arrière un second plus bas (≥ 50 m) ; annexe I 2 g et 2 k
+      const fb = Math.min(12, Math.max(1.2, 0.045 * L)), zF = Math.min(30, fb + Math.max(6, 0.06 * L));
+      if (L >= 50) res.push({ a: 0.45 * L, b: 0, z: zF, col: 'W', range: arR }, { a: -0.46 * L, b: 0, z: zF - 4.5, col: 'W', range: arR });
+      else res.push({ a: 0.3 * L, b: 0, z: hM, col: 'W', range: arR });
+      return res;
+    }
     case 'sail':
       // feu tricolore en tête de mât (voilier de moins de 20 m)
       if (mk) res.push({ a: 0.05 * L, b: 0, z: 1.3 * L, col: green ? 'G' : red ? 'R' : 'W', range: L >= 12 ? 2 : 1 });
@@ -104,6 +112,7 @@ export function dayShapes(t: Target): Shape3D[] {
   const a = 0.1 * t.L, z = mastH(t.L) - 1.5;
   if (t.type === 'fish') return [{ a, z: z + 0.7, shape: 'coneDown' }, { a, z, shape: 'coneUp' }];
   if (t.type === 'nuc') return [{ a, z: z + 1.5, shape: 'ball' }, { a, z, shape: 'ball' }];
+  if (t.type === 'anchor') return [{ a: 0.45 * t.L, z: Math.min(12, Math.max(1.2, 0.045 * t.L)) + 5, shape: 'ball' }];
   if (t.type === 'ram') return [{ a, z: z + 3, shape: 'ball' }, { a, z: z + 1.5, shape: 'diamond' }, { a, z, shape: 'ball' }];
   return [];
 }

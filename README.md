@@ -21,15 +21,17 @@ Simulateur web pour s'entraîner à l'anticollision et à l'application du RIPAM
 
 ## Exercices
 
-Vingt-cinq exercices sur cinq niveaux, chacun avec une route prévue (affichée en rouge sur le radar, écart latéral suivi dans le bilan) :
+Vingt-six exercices sur cinq niveaux, chacun avec une route prévue (affichée en rouge sur le radar, écart latéral suivi dans le bilan) :
 
 - **Fondamentaux** : face à face (R14), croisement non privilégié (R15/16), croisement privilégié (R17), rattrapement (R13), responsabilités réciproques (R18), visibilité réduite (R19).
-- **Situations combinées** : changement de route au point tournant, double croisement, face à face et rattrapant, non privilégié qui ne manœuvre pas, manœuvre à contresens, avarie en croisement (le privilégié devient non privilégié, R18), trafic mixte.
+- **Situations combinées** : changement de route au point tournant, double croisement, face à face et rattrapant, non privilégié qui ne manœuvre pas, manœuvre à contresens, avarie en croisement (le privilégié devient non privilégié, R18), trafic mixte, navires au mouillage de nuit (R30).
 - **Avancé** : petit voilier de nuit par mer formée, flottille de chalutiers, NUC en dérive, grains et bande X, trafic dense, trafic dense en brume, changement de route en brume.
 - **Pas-de-Calais (DST, règle 10)** : traversée du DST à angle droit dans un trafic dense, rattrapement en brume dans la voie montante entre le Colbart et le Varne, navire à contresens dans la voie descendante.
 - **Détroit de Gibraltar (DST, règle 10)** : transit vers l'Atlantique dans la voie ouest avec les transbordeurs rapides Tarifa / Tanger, appareillage de nuit de Tanger-Med par la zone de prudence, arrivée à Algeciras en brume de Levant en coupant la voie ouest.
 
 La carte du Pas-de-Calais est **schématique et non destinée à la navigation** : trait de côte © contributeurs OpenStreetMap (ODbL), dispositif de séparation du trafic d'après les positions officielles de l'OMI, bancs et isobathes modélisés. Sources et limites : [docs/carte-pas-de-calais.md](docs/carte-pas-de-calais.md). Même principe pour le détroit de Gibraltar (DST d'après COLREG.2/Circ.66) : [docs/carte-gibraltar.md](docs/carte-gibraltar.md).
+
+**Signaux sonores** (R34, R35, annexe III) : sifflet du porteur (brefs et prolongés), signal de brume automatique, signaux de brume et de manœuvre des autres navires entendus selon leur distance, cloche et gong des navires au mouillage ; le bilan relève l'absence de signal de brume (R35) et les signaux de manœuvre (R34a).
 
 Le réglage **Trafic** (discipliné, réaliste, imprévisible) règle la proportion de navires qui appliquent correctement le RIPAM, tardivement, pas du tout, ou à contresens.
 

@@ -11,6 +11,7 @@ import { initDebrief, drawDebrief } from './ui/debrief';
 import { currentView, initControls, upd } from './ui/controls';
 import { initRudder, drawRudder } from './ui/rudder';
 import { initTelegraph, drawTelegraph } from './ui/telegraph';
+import { hornTick } from './ui/audio';
 
 const canvas = document.getElementById('radar') as HTMLCanvasElement;
 const ecdis = document.getElementById('ecdis') as HTMLCanvasElement;
@@ -44,6 +45,7 @@ function frame(now: number): void {
   if (v === 'debrief') drawDebrief();
   drawRudder();
   drawTelegraph();
+  hornTick();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

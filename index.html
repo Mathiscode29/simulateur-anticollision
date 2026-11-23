@@ -82,6 +82,13 @@
         <button data-act="rud" data-v="-35">Bd 35</button><button data-act="rud" data-v="-20">Bd 20</button><button data-act="rud" data-v="-10">Bd 10</button><button data-act="rud" data-v="0">Zéro</button><button data-act="rud" data-v="10">Td 10</button><button data-act="rud" data-v="20">Td 20</button><button data-act="rud" data-v="35">Td 35</button>
       </div>
     </div>
+    <h4>Signaux sonores</h4>
+    <div class="grid4 horn">
+      <button data-act="horn" data-v="C" title="R34a : je viens sur tribord">1 bref · Td</button><button data-act="horn" data-v="CC" title="R34a : je viens sur bâbord">2 brefs · Bd</button><button data-act="horn" data-v="CCC" title="R34a : je bats en arrière">3 brefs · AR</button><button data-act="horn" data-v="CCCCC" title="R34d : doute sur les intentions de l'autre">5 brefs · doute</button>
+      <button data-act="horn" data-v="P" title="R35a : faisant route en visibilité réduite (toutes les 2 min au plus)">1 prolongé</button><button data-act="horn" data-v="PP" title="R35b : stoppé sans erre en visibilité réduite">2 prolongés</button>
+    </div>
+    <div class="row"><span class="lbl">Brume auto (R35)</span><div class="seg" data-seg="fogAuto" title="Signal de brume automatique : un prolongé (ou deux stoppé) toutes les 110 s"><button data-v="1">Marche</button><button data-v="0">Arrêt</button></div></div>
+    <div class="row"><span class="lbl">Sons entendus</span><div class="seg" data-seg="hornOn" title="Jouer les signaux sonores (le vôtre et ceux des navires à portée d'audibilité)"><button data-v="1">Oui</button><button data-v="0">Non</button></div></div>
     <h4>Transmetteur d'ordres</h4>
     <div class="teleBox"><div class="tele" id="tele"></div><div class="teleCv"><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div></div>
   </section>

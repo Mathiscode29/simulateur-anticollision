@@ -26,6 +26,7 @@ export const TT: Record<TargetType, { n: string[]; L: [number, number] }> = {
   sail: { n: ['Voilier'], L: [10, 18] },
   nuc: { n: ['Navire non maître de sa manœuvre'], L: [90, 190] },
   ram: { n: ['Navire à capacité de manœuvre restreinte (câblier)'], L: [60, 130] },
+  anchor: { n: ['Vraquier au mouillage', 'Pétrolier au mouillage', 'Porte-conteneurs au mouillage', 'Cargo au mouillage'], L: [120, 300] },
 };
 /** Types bénéficiant de la règle 18 face à un navire à propulsion mécanique. */
 export const SPECIAL: ReadonlySet<TargetType> = new Set<TargetType>(['fish', 'sail', 'nuc', 'ram']);
@@ -37,6 +38,7 @@ export const ROLE_TXT: Partial<Record<Role, string>> = {
   overtaking: 'Vous rattrapez (R13 : vous vous écartez)',
   overtaken: 'Vous êtes rattrapé (R13 / R17 : vous maintenez)',
   giveway18: 'Navire privilégié au titre de R18 : vous vous écartez',
+  anchor: 'Navire au mouillage : vous l\'évitez largement (R2, R8)',
   R19: 'Visibilité réduite (R19) : ni privilégié ni non privilégié',
 };
 

@@ -2,8 +2,10 @@
 import { DEFAULT_SHIP, SHIPS } from './data';
 import type { MMGParams } from '../sim/mmg';
 
-export type TargetType = 'power' | 'small' | 'fish' | 'sail' | 'nuc' | 'ram';
-export type Role = 'giveway' | 'standon' | 'headon' | 'overtaking' | 'overtaken' | 'giveway18' | 'standon18' | 'R19';
+/** anchor : navire au mouillage (R30, R35g). */
+export type TargetType = 'power' | 'small' | 'fish' | 'sail' | 'nuc' | 'ram' | 'anchor';
+/** anchor : le porteur s'écarte d'un navire au mouillage (R2, R8). */
+export type Role = 'giveway' | 'standon' | 'headon' | 'overtaking' | 'overtaken' | 'giveway18' | 'standon18' | 'R19' | 'anchor';
 export type Behaviour = 'good' | 'late' | 'passive' | 'wrong';
 export type Visibility = 'good' | 'poor';
 export type Compliance = 'disc' | 'real' | 'hostile';
@@ -183,8 +185,8 @@ export interface State {
   collided: number | null; report: Report | null; env: Env; radar: RadarSettings;
   alerts: Alert[]; rainCells: RainCell[]; silencedUntil: number;
   route: Route | null;
-  /** Carte courante (« open » = large sans terre, « pdc » = Pas-de-Calais). */
-  chart: 'open' | 'pdc';
+  /** Carte courante (« open » = large sans terre, « pdc » = Pas-de-Calais, « gib » = Gibraltar). */
+  chart: string;
   coast: CoastRadar | null;
   /** Dernier éclairement radar des bouées et bateaux-feux (par identifiant). */
   /** Échos des bouées : instant du dernier passage du faisceau (t) et du précédent (tp). */
@@ -197,6 +199,31 @@ export interface State {
   /** Alertes de condition de navigation (ECDIS, DST) recalculées chaque seconde. */
   navAlerts: { id: string; cat: AlertCat; text: string }[];
   rec: Recording | null;
+  /** Signaux sonores (R34, R35) : file des signaux émis, réglage du signal de brume automatique du porteur, suivi R35. */
+  snd: SoundState;
+}
+
+/** Signal sonore : P = son prolongé (≈ 5 s), C = son bref (≈ 1 s), B = cloche (5 s), G = gong (5 s). */
+export interface SoundSig {
+  id: number; src: number; t: number; pat: string;
+  /** fog : signal de brume (R35) ; man : signal de manœuvre (R34a ou c) ; doubt : signal de doute (R34d). */
+  kind: 'fog' | 'man' | 'doubt';
+  /** Position de la source (NM) à l'émission ; longueur du navire (fréquence et portée, annexe III). */
+  x: number; y: number; L: number;
+}
+export interface SoundState {
+  seq: number; list: SoundSig[];
+  /** Signal de brume automatique du porteur (R35a ou b). */
+  fogAuto: boolean;
+  /** Dernier signal de brume du porteur, temps cumulé en visibilité réduite sans signal à jour (s). */
+  lastFog: number; missed: number;
+  /** Dernier signal de brume et dernier signal de manœuvre de chaque cible. */
+  tFog: Record<number, number>; tMan: Record<number, number>; cmd: Record<number, number>;
+  /** Signaux émis par le porteur pendant l'exercice (évaluation R34). */
+  own: { t: number; pat: string }[];
+}
+export function newSoundState(): SoundState {
+  return { seq: 1, list: [], fogAuto: false, lastFog: -1e9, missed: 0, tFog: {}, tMan: {}, cmd: {}, own: [] };
 }
 
 export function newTssWatch(): TssWatch {
@@ -221,7 +248,7 @@ export const S: State = {
     cpaLim: 1, tcpaLim: 12, zone: 0, trial: false, trialHdg: 0, trialSpd: 0, trialDelay: 0, trialT0: 0, palette: 'DUSK',
   },
   alerts: [], rainCells: [], silencedUntil: 0, route: null,
-  chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], rec: null,
+  chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], rec: null, snd: newSoundState(),
   ecdis: {
     safety: 30, look: 6, ebl: null, vrm: null, tool: 'INFO',
     layers: { tss: true, depth: true, names: true, ais: true, arpa: true }, aisRadar: true, routeIssues: [],

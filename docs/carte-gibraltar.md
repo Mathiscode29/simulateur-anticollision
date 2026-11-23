@@ -24,6 +24,7 @@ Les ENC du SHOM, de l'IHM et de l'UKHO ne sont pas utilisées (données non libr
 - Le trafic des voies garde une marge de 0,3 NM avec les limites quand la voie se rétrécit, et se resserre sur l'axe dans les zones de prudence.
 - Règle 10 : suivi de la voie, contresens, traversées, zone de séparation, zone de navigation côtière ; la zone de prudence déclenche une alerte de prudence et une mention au bilan, sans pénalité.
 - ECDIS : zones de prudence (limite en tirets, symbole « ! »), mouillage, phares (étoile, caractère, portée).
+- Navires au mouillage : dans le cercle du Mouillage Alpha (COLREG.2/Circ.66) et à l'entrée de la baie d'Algeciras ; ces dernières positions sont indicatives (pas de zone de mouillage officielle reprise).
 - Vue extérieure : phares visibles jusqu'à leur portée géographique (élévation du feu et de l'œil), cachés par la terre située devant eux ; ligne de crête calculée sur la terre traversée par chaque rayon (le relief en retrait de la côte apparaît).
 
 ## Limites connues

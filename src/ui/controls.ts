@@ -12,6 +12,8 @@ import { cursor, geo, resetTM } from './render';
 import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
 import { checkRoute, depthAt, tssAt } from '../sim/chart';
 import { look, lookBy } from './outside';
+import { beep, ensureAudio, hornCfg } from './audio';
+import { ownSignal } from '../sim/sound';
 import { RP, currentKey, openDebrief, seek, situationRows, stepKey, togglePlay } from './debrief';
 import { fmtT } from '../sim/debrief';
 import { fmtLat, fmtLon, toLL } from '../core/geo';
@@ -102,6 +104,8 @@ const SEGS: Record<string, Seg> = {
   ecLook: { g: () => String(S.ecdis.look), s: (v) => (S.ecdis.look = +v) },
   ecTool: { g: () => S.ecdis.tool, s: (v) => (S.ecdis.tool = v as typeof S.ecdis.tool) },
   aisRadar: { g: () => (S.ecdis.aisRadar ? '1' : '0'), s: (v) => (S.ecdis.aisRadar = v === '1') },
+  fogAuto: { g: () => (S.snd.fogAuto ? '1' : '0'), s: (v) => { S.snd.fogAuto = v === '1'; logE(S.snd.fogAuto ? 'Signal de brume automatique en service (R35)' : 'Signal de brume automatique arrêté'); } },
+  hornOn: { g: () => (hornCfg.on ? '1' : '0'), s: (v) => (hornCfg.on = v === '1') },
   dbSpeed: { g: () => String(RP.speed), s: (v) => (RP.speed = +v) },
   dbMode: { g: () => RP.mode, s: (v) => { RP.mode = v as typeof RP.mode; RP.view.fit = true; } },
   dbAuto: { g: () => (RP.autoPause ? '1' : '0'), s: (v) => (RP.autoPause = v === '1') },
@@ -114,19 +118,6 @@ function routeCheck(): void {
   const n = S.ecdis.routeIssues.length;
   if (n) logE(`Vérification de route : ${n} point(s) sous le contour de sécurité (${S.ecdis.safety} m), segment(s) ${[...new Set(S.ecdis.routeIssues.map((i) => i.leg))].join(', ')}`, 'warn');
   else logE(`Vérification de route : aucun danger sous le contour de sécurité (${S.ecdis.safety} m)`);
-}
-
-let audio: AudioContext | null = null;
-function ensureAudio(): void {
-  if (!audio) { try { audio = new AudioContext(); } catch { audio = null; } }
-}
-function beep(freq: number, dur: number, delay = 0): void {
-  if (!audio) return;
-  try {
-    const t = audio.currentTime + delay, o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = freq; o.type = 'square'; g.gain.value = 0.04;
-    o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + dur);
-  } catch { /* son indisponible */ }
 }
 
 function stepTele(d: number): void {
@@ -188,6 +179,7 @@ function acquireOrSelect(p: { tr?: number; tid?: number }): void {
 }
 
 const ACT: Record<string, (v: string) => void> = {
+  horn(v) { if (S.started && !S.over) ownSignal(v); },
   play() { if (S.over) newScenario(); S.started = true; S.paused = !S.paused; },
   hdg(v) { stepHdg(+v); },
   rud(v) { const o = S.own; o.ap = false; o.manRud = +v; $in('rudSl').value = v; logE(`Barre ${rudTxt(+v)}`); },

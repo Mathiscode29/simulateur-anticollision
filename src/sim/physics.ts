@@ -36,7 +36,6 @@ export function gv(hdg: number, stw: number, windage: number): Vec {
   return { x: w.x + n.x * wp * lf + c.x, y: w.y + n.y * wp * lf + c.y };
 }
 
-/** Vecteur surface du porteur tel que mesuré par gyro + loch (sans dérive au vent). */
 /** Vitesse surface du porteur (kn), dérive due au vent comprise (vitesse transversale v du modèle MMG). */
 export function ownWater(): Vec {
   const o = S.own, f = vec(o.hdg, o.u / MS), s = vec(o.hdg + 90, o.v / MS);
@@ -95,6 +94,12 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
 
 /** Cibles : giration à taux limité vers le cap ordonné, vitesse du 1er ordre. */
 export function stepT(t: Target, dt: number): void {
+  if (t.type === 'anchor') {
+    // évité au vent (au courant par vent faible), position fixe
+    const e = S.env, lie = e.windKn >= 6 ? e.windFrom : n360(e.curSet + 180), d = adiff(lie, t.hdg);
+    t.hdg = n360(t.hdg + clamp(d, -0.15 * dt, 0.15 * dt)); t.rot = 0; t.stw = 0; t.vx = 0; t.vy = 0;
+    return;
+  }
   const e = adiff(t.cmdHdg, t.hdg), rr = clamp(e * 0.06, -t.maxRot, t.maxRot);
   t.rot += (rr - t.rot) * Math.min(1, dt / t.tau);
   t.hdg = n360(t.hdg + t.rot * dt);

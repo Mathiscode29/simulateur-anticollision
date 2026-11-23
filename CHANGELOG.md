@@ -7,6 +7,14 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.4 — 23 novembre 2026
+Navires au mouillage et signaux sonores.
+- Navires au mouillage (R30) : immobiles, évités au vent (au courant par vent faible), deux feux blancs tous horizons (l'avant plus haut), ponts éclairés à partir de 100 m, boule noire de jour, statut AIS « au mouillage » (message toutes les 3 min). Le navire qui fait route les évite, porteur comme trafic (R2, R8) ; bilan : marge de passage, passage sur l'avant d'un navire au mouillage signalé.
+- Nouvel exercice « Navires au mouillage, de nuit » (niveau 2) ; navires au mouillage dans le Mouillage Alpha (COLREG.2/Circ.66) et à l'entrée de la baie d'Algeciras (positions indicatives).
+- Signaux sonores (R32 à R35, annexe III), audibles : sifflet selon la longueur du navire, cloche et gong au mouillage, volume selon la distance et portée d'audibilité, son spatialisé selon le relèvement. Signaux de brume des autres navires (R35), signaux de manœuvre des navires qui évitent (R34a), cinq brefs d'un privilégié qui doute de vos intentions (R34d).
+- Onglet Barre : sifflet du porteur (1, 2, 3 ou 5 brefs, 1 ou 2 prolongés), signal de brume automatique, sons entendus oui / non ; dernier signal entendu affiché dans la vue extérieure, et noté au journal.
+- Bilan : R35 (signal de brume absent en visibilité réduite), R34a (signal de manœuvre donné, absent ou contraire au sens de l'abattée).
+
 ## V1.3 — 23 novembre 2026
 Pont du VLCC détaillé, nuages arrondis, rendu 3D retiré.
 - Pont du pétrolier porteur : collecteurs de cargaison, passerelle de pont sur supports, manifold (traverses et colonnes montantes), grues de manutention des flexibles, panneaux de citerne, soupapes P/V, mât de dégazage, guindeaux ; l'épaisseur des tubes suit la perspective.

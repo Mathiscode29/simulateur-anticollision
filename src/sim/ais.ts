@@ -14,7 +14,7 @@ import { K2N, adiff, brgOf, gauss, pick } from '../core/util';
 
 const STATUS: Record<TargetType, string> = {
   power: 'en route au moteur', small: 'en route au moteur', fish: 'en pêche', sail: 'à la voile',
-  nuc: 'non maître de sa manœuvre', ram: 'capacité de manœuvre restreinte',
+  nuc: 'non maître de sa manœuvre', ram: 'capacité de manœuvre restreinte', anchor: 'au mouillage',
 };
 
 /** Statut de navigation AIS correspondant au type de navire. */

@@ -5,14 +5,15 @@
  * Une rencontre peut être prévue après un point tournant de la route (référence « porteur virtuel » au point).
  * Exercices sur carte réelle (Pas-de-Calais, détroit de Gibraltar) : position de départ et points tournants géographiques
  * (WGS 84), trafic qui suit les voies du DST (laneShip, laneMeet, laneMeetRoute, laneAhead, laneAt, laneFill).
+ * Navires au mouillage : anchorAhead (sur l'avant du porteur) et anchorGeo (position géographique).
  */
-import { S, logE, newTssWatch, type Behaviour, type Env, type Route, type Target, type TargetType, type Visibility } from '../core/state';
+import { S, logE, newSoundState, newTssWatch, type Behaviour, type Env, type Route, type Target, type TargetType, type Visibility } from '../core/state';
 import { DEFAULT_SHIP, SHIPS, SHIP_NAMES, TELE, TELE_SEA, TT } from '../core/data';
 import { K2N, adiff, brgOf, clamp, n360, p3, pick, pm, rnd, vec } from '../core/util';
 import { gv, initOwnDynamics } from './physics';
 import { pickBeh, roleOf } from './rules';
 import { makeRoute } from './route';
-import { depthAt, laneOf, loadChart, pointAt, polyLength, projOnPolyline, tssAt, type ChartKey } from './chart';
+import { CHART, depthAt, laneOf, loadChart, pointAt, polyLength, projOnPolyline, tssAt, type ChartKey } from './chart';
 import { makeAis } from './ais';
 import { newRecording } from './debrief';
 import { toXY } from '../core/geo';
@@ -85,6 +86,15 @@ export const SCEN: Record<string, Scenario> = {
       const k = shuffle<Kind>(['headon', 'gw', 'so', 'fish', 'overtake', 'sail']);
       add(k[0], rnd(12, 15), pm(0, 0.2)); add(k[1], rnd(22, 26), pm(0, 0.25)); add(k[2], rnd(32, 36), pm(0, 0.25));
       for (let i = 0; i < 3; i++) add('any', rnd(14, 35), pm(1.8, 4));
+    } },
+  c_mouillage: { n: 'Navires au mouillage, de nuit', d: 'Quatre navires au mouillage aux abords de la route, dont un droit devant ; un croiseur passe entre eux. Reconnaître les feux de mouillage (R30) et les éviter largement.', lvl: 2, vis: 'good',
+    env: { night: true, windKn: 14 },
+    build() {
+      anchorAhead(rnd(14, 17), pm(0, 0.12));
+      anchorAhead(rnd(19, 22), rnd(1, 1.4));
+      anchorAhead(rnd(25, 28), -rnd(1, 1.4));
+      anchorAhead(rnd(31, 34), pm(1.2, 1.6));
+      add('gw', rnd(26, 30), pm(0, 0.25));
     } },
 
   // ----- Avancé
@@ -165,6 +175,7 @@ export const SCEN: Record<string, Scenario> = {
       const g = addAfterWp(4, 'so', rnd(8, 11), pm(0, 0.3), 25);
       if (g) { g.name = 'Transbordeur rapide'; g.L = 100; g.beh = Math.random() < 0.5 ? 'late' : g.beh; }
       laneFill('E', 5); laneFill('W', 2);
+      anchorAlpha(2);
     } },
   gib_tanger: { n: 'Appareillage de Tanger-Med, de nuit', lvl: 5, vis: 'good', chart: 'gib',
     d: 'Sortie de Tanger-Med vers l\'Atlantique : couper le flux montant vers la Méditerranée dans la zone de prudence, puis rallier la voie ouest. Feux de navires et phares de Tarifa, Carnero et Europa Point.',
@@ -178,6 +189,7 @@ export const SCEN: Record<string, Scenario> = {
       laneAt('W', j, -2.5, rnd(0.3, 0.5), 9);
       laneAt('W', j, -7, pm(0.2, 0.5), 18);
       laneFill('E', 4);
+      anchorAlpha(3);
     } },
   gib_alge: { n: 'Arrivée à Algeciras par brume de Levant', lvl: 5, vis: 'poor', chart: 'gib',
     d: 'Venant de l\'Atlantique par la voie est, en brume : rattraper un navire lent, puis couper la voie ouest dans la zone de prudence est pour gagner la baie d\'Algeciras, avec un transbordeur Algeciras / Ceuta.',
@@ -191,6 +203,8 @@ export const SCEN: Record<string, Scenario> = {
       const f = addAfterWp(4, 'headon', rnd(4, 6), pm(0.3, 0.5), 24);
       if (f) { f.name = 'Transbordeur rapide'; f.L = 95; }
       laneFill('W', 4);
+      // baie d'Algeciras : navires au mouillage de part et d'autre de la route finale (positions indicatives)
+      anchorGeo(dm(36, 3.6), dmW(5, 21.4)); anchorGeo(dm(36, 4.4), dmW(5, 24.6)); anchorGeo(dm(36, 2.6), dmW(5, 25.0));
     } },
 };
 
@@ -277,6 +291,31 @@ export function laneFill(id: string, n: number): void {
     laneShip(id, s, off, rnd(10, 19), { type: Math.random() < 0.2 ? 'small' : 'power' });
     placed++;
   }
+}
+
+/** Navire au mouillage en (x, y) (NM), évité au vent (au courant par vent faible). */
+export function anchorAt(x: number, y: number): Target | null {
+  if (depthAt(x, y) < 15) return null;
+  const e = S.env, lie = e.windKn >= 6 ? e.windFrom : n360(e.curSet + 180);
+  const t = mkT('anchor', n360(lie + pm(0, 12)), 0, x, y);
+  t.vx = 0; t.vy = 0;
+  return t;
+}
+/** Navire au mouillage à `Tmin` minutes sur l'avant du porteur, à `off` NM sur le côté (positif = tribord). */
+export function anchorAhead(Tmin: number, off: number): Target | null {
+  const o = S.own, p = vec(o.hdg, (Math.max(o.stw, 5) * Tmin) / 60), q = vec(o.hdg + 90, off);
+  return anchorAt(o.x + p.x + q.x, o.y + p.y + q.y);
+}
+/** Navire au mouillage à une position géographique (WGS 84). */
+export function anchorGeo(lat: number, lon: number): Target | null {
+  const p = toXY(lat, lon);
+  return anchorAt(p.x, p.y);
+}
+/** Navires au mouillage dans la zone « Mouillage Alpha » de la carte (cercle de COLREG.2/Circ.66). */
+function anchorAlpha(n: number): void {
+  const a = CHART.anch[0];
+  if (!a) return;
+  for (let i = 0; i < n; i++) { const v = vec((360 / n) * i + rnd(0, 40), a.r * rnd(0.3, 0.8)); anchorAt(a.x + v.x, a.y + v.y); }
 }
 
 function shuffle<T>(a: T[]): T[] { return a.sort(() => Math.random() - 0.5); }
@@ -393,7 +432,7 @@ export function newScenario(): void {
     t: 0, targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1,
     aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], over: false, collided: null, report: null, started: false, paused: true,
     alerts: [], rainCells: [], silencedUntil: 0, route,
-    chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [],
+    chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], snd: newSoundState(),
   });
   Object.assign(S.ecdis, { ebl: null, vrm: null, routeIssues: [] });
   S.rec = newRecording();
