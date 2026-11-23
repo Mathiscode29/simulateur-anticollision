@@ -98,10 +98,10 @@ canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: 
 .big { font-size: 15px } .big b { font-family: ui-monospace, Menlo, monospace; font-size: 22px; color: var(--tx) }
 .grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px }
 .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px }
-.teleBox { display: flex; gap: 10px; align-items: stretch }
+.teleBox { display: flex; gap: 10px; align-items: stretch; height: 340px }
 .teleCv { flex: 1; min-width: 0; position: relative }
-.tele { display: grid; grid-template-columns: 1fr; gap: 4px; flex: 0 0 132px }
-.tele button { padding: 5px 6px; font-size: 12px; text-align: left }
+.tele { position: relative; flex: 0 0 132px }
+.tele button { position: absolute; left: 0; right: 0; height: 26px; padding: 0 8px; font-size: 12px; text-align: left }
 #telegraph { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; background: #15181c; box-shadow: inset 0 0 0 1px var(--ln); cursor: pointer; touch-action: none }
 body.pal-night #telegraph { background: #050607 }
 .tele button.ast { border-color: #6b3a3a }
