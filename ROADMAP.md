@@ -76,7 +76,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] V1.2 : retour au rendu 2D par défaut (fluidité), silhouettes en blocs par famille de navire, ciel, mer et relief en paliers ; 3D en option chargée à la demande
 - [x] V1.3 : pont du VLCC détaillé (tuyautage, manifold, grues), cumulus arrondis ; rendu 3D et three.js retirés
 - [x] V1.4 : signaux sonores audibles (R34, R35, annexe III), sifflet du porteur et signal de brume automatique ; navires au mouillage (R30)
-- [ ] Ports et feux de port
+- [x] V1.5 : ports et feux de port (NGA Pub. 113 / 114), phares supplémentaires ; défilement fluide de la vue extérieure
 
 ## Garde-fous permanents
 - Ergonomie inspirée des consoles du marché, sans logo ni charte de constructeur : la norme IEC suffit

@@ -35,6 +35,8 @@ let W = 0, DPR = 1;
  */
 let frac = 0;
 export function setSimFrac(f: number): void { frac = clamp(f, 0, DT); }
+/** Fraction (s) du pas de simulation écoulée depuis le dernier pas, pour interpoler l'affichage. */
+export const simFrac = (): number => frac;
 /** Position du curseur sur le scope (pixels CSS), null hors du scope. */
 export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
 

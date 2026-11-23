@@ -21,6 +21,7 @@ Les ENC du SHOM et de l'UKHO ne sont pas utilisées (données non libres).
 - Appartenance aux voies, aux zones de séparation et aux zones de navigation côtière ; sens de circulation donné par l'axe de chaque voie.
 - Trafic qui suit les voies (poursuite d'un point de l'axe avec un décalage latéral propre à chaque navire, rapprochement de l'axe à l'approche des petits fonds), ferry traversier, navire à contresens.
 - Radar : échos de côte et de bouées, masquage derrière la terre.
+- Phares (Dungeness, Folkestone, Dover, Cap d'Alprech, Cap Gris-Nez, Calais, Dunkerque) et feux de port des musoirs (Dover, Boulogne, Calais, Gravelines, Dunkerque) : positions et caractères d'après NGA Pub. 114 (2016), domaine public ; portées des phares français d'après les fiches publiées ; feux de port sans portée relevée : 5 M par défaut. Données à vérifier sur un livre des feux à jour avant tout usage réel (non destiné à la navigation).
 
 ## Limites connues
 

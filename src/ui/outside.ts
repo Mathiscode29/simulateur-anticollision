@@ -20,9 +20,10 @@
  */
 import { S, type Target } from '../core/state';
 import { TELE } from '../core/data';
-import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
+import { D2R, K2N, adiff, brgOf, clamp, n360, p3 } from '../core/util';
 import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
-import { dayShapes, mastH, navLights3D, shipKind } from '../sim/visual';
+import { simFrac } from './render';
+import { dayShapes, lightColour, lightOn, mastH, navLights3D, shipKind } from '../sim/visual';
 import { OWN, audibleRange, patText, sideOf } from '../sim/sound';
 
 export const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
@@ -94,7 +95,7 @@ const CAPS = [0, 0, 0, 0.01, 0.04, 0.1, 0.18, 0.28, 0.38, 0.48, 0.55, 0.6, 0.65]
 
 /** Roulis et tangage du porteur (degrés) : amplitude modeste pour un VLCC chargé, périodes 14 s et 9 s. */
 export function motion(): { roll: number; pitch: number } {
-  const hs = HS[beaufort(S.env.windKn)], t = S.t;
+  const hs = HS[beaufort(S.env.windKn)], t = TV;
   const ar = Math.min(3, 0.32 * hs), ap = Math.min(1.2, 0.12 * hs);
   return { roll: ar * (Math.sin((2 * Math.PI * t) / 14) + 0.3 * Math.sin((2 * Math.PI * t) / 23 + 1)), pitch: ap * Math.sin((2 * Math.PI * t) / 9 + 0.7) };
 }
@@ -142,15 +143,21 @@ const box = (a0: number, a1: number, hb: number, z0: number, z1: number): [numbe
 
 // ---------------------------------------------------------------- dessin
 
-/** Dernier rendu : la vue extérieure est limitée à 30 images par seconde (la simulation, elle, ne dépend pas de l'affichage). */
-let lastDraw = 0;
+/** Dernier rendu et durée moyenne d'un rendu (ms) : la cadence baisse à 30 i/s si l'ordinateur peine. */
+let lastDraw = 0, drawMs = 0;
+/** Instant affiché : simulation extrapolée de la fraction de pas écoulée (mouvement fluide entre deux pas de 0,25 s). */
+let TV = 0;
+const vecM = (b: number, v: number) => ({ x: v * Math.sin(b * D2R), y: v * Math.cos(b * D2R) });
 
 export function drawOutside(): void {
   if (!W || !H) return;
   const now = performance.now();
-  if (now - lastDraw < 31) return;
+  // pleine cadence tant que le rendu est léger ; 30 i/s seulement si l'ordinateur peine (rendu > 12 ms)
+  if (drawMs > 12 && now - lastDraw < 31) return;
   lastDraw = now;
-  const o = S.own, sk = sky(), hf = fov();
+  const fr = S.paused || S.over ? 0 : simFrac();
+  TV = S.t + fr;
+  const O = S.own, o = { ...O, x: O.x + O.vx * K2N * fr, y: O.y + O.vy * K2N * fr, hdg: n360(O.hdg + O.rot * fr) }, sk = sky(), hf = fov();
   const rel = look.rel + (look.aft ? 180 : 0), yaw = n360(o.hdg + rel);
   const eyeA = -o.L / 2 + 50; // passerelle à l'arrière
   const F = W / 2 / Math.tan((hf / 2) * D2R);
@@ -185,12 +192,13 @@ export function drawOutside(): void {
   waves(sk, bf);
   drawMarks(sk, bf);
   // cibles, de la plus lointaine à la plus proche
-  const ts = [...S.targets].map((t) => ({ t, d: Math.hypot(t.x * NM - cam.ex, t.y * NM - cam.ey) })).sort((u, v) => v.d - u.d);
+  const ts = S.targets.map((t0) => { const t = { ...t0, x: t0.x + t0.vx * K2N * fr, y: t0.y + t0.vy * K2N * fr, hdg: n360(t0.hdg + t0.rot * fr) }; return { t, d: Math.hypot(t.x * NM - cam.ex, t.y * NM - cam.ey) }; }).sort((u, v) => v.d - u.d);
   for (const { t, d } of ts) drawTarget(t, d, sk);
   ctx.restore();
   if (!look.aft) ownDeck(sk);
   if (look.binoc) binocMask(); else { bridgeFrame(sk); if (look.inst) instruments(bf); }
   hud(hf, bf);
+  drawMs = drawMs * 0.9 + (performance.now() - now) * 0.1;
 }
 
 function stars(yH: number): void {
@@ -205,7 +213,7 @@ function stars(yH: number): void {
 
 /** Cumulus de beau temps : quelques bulles arrondies sur une base plate, ombre sous la base ; dérive lente avec le vent. */
 function clouds(sk: Sky, yH: number): void {
-  const hf = fov(), body = new Path2D(), shade = new Path2D(), drift = S.t * 0.0004 * S.env.windKn;
+  const hf = fov(), body = new Path2D(), shade = new Path2D(), drift = TV * 0.0004 * S.env.windKn;
   const blob = (p: Path2D, x: number, y: number, rx: number, ry: number) => { p.moveTo(x + rx, y); p.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI); };
   for (let i = 0; i < 24; i++) {
     const az = n360(i * 163.7 + drift * (1 + (i % 3) * 0.3)), el = 2.5 + ((i * 7.7) % 13), w = 3 + ((i * 5.3) % 8), rel = adiff(az, cam.yaw);
@@ -235,17 +243,6 @@ export function landHeight(x: number, y: number): { h: number; cliff: number } {
     if (c.cliff) cl = Math.max(cl, k);
   }
   return { h, cliff: cl };
-}
-
-/** Caractère d'un feu (Fl(n), Iso, Oc, Mo(A)) : allumé à l'instant t ? Rythmes simplifiés. */
-export function charOn(light: string, t: number): boolean {
-  const per = Number(/(\d+(?:\.\d+)?)\s*s\b/.exec(light)?.[1] ?? 10), ph = ((t % per) + per) % per;
-  const grp = /Fl\s*\((\d+)\)/.exec(light);
-  if (grp) { const n = Number(grp[1]); return ph < n * 1.4 && ph % 1.4 < 0.5; }
-  if (/^Iso/.test(light)) return ph < per / 2;
-  if (/^Oc/.test(light)) return !(ph < 1.2 || (/Oc\s*\(2\)/.test(light) && ph >= 2 && ph < 3.2));
-  if (/Mo\s*\(A\)/.test(light)) return ph < 0.5 || (ph >= 1 && ph < 2.5);
-  return ph < 0.6;
 }
 
 function drawCoast(sk: Sky, hf: number): void {
@@ -301,7 +298,10 @@ function drawCoast(sk: Sky, hf: number): void {
  */
 function waves(sk: Sky, bf: number): void {
   const cell = 30 + 6 * bf, R = 1500, to = (S.env.windFrom + 180) * D2R, ux = Math.sin(to), uy = Math.cos(to);
-  const c = 4 + 1.6 * bf, ox = ux * c * S.t, oy = uy * c * S.t; // dérive du champ de vagues
+  // dérive lente de la texture de surface (courant + dérive due au vent) : l'œil la lit comme liée à l'eau ;
+  // une vitesse de phase réelle (≈ 10 m/s) donnait l'impression que le navire avançait en crabe
+  const cv = vecM(S.env.curSet, S.env.curKn * 0.514), dw = 0.12 + 0.05 * bf;
+  const ox = (cv.x + ux * dw) * TV, oy = (cv.y + uy * dw) * TV;
   const px = cam.ex - ox, py = cam.ey - oy, ci = Math.floor(px / cell), cj = Math.floor(py / cell), n = Math.ceil(R / cell);
   const crest = 4 + 2.2 * bf, kx = Math.cos(to), ky = -Math.sin(to); // direction des crêtes (perpendiculaire au vent)
   const hi = mix(sk.seaH, [255, 255, 255], sk.night ? 0.04 : 0.22), lo = mix(sk.seaN, [0, 0, 0], sk.night ? 0 : 0.25);
@@ -323,7 +323,7 @@ function waves(sk: Sky, bf: number): void {
     if (bf >= 3) LO[cls].rect(x0, y + th * 0.5, w, th);
     // moutons : écume en pavés qui naît et se résorbe
     if (h1 * h2 < capP) {
-      const life = Math.sin(S.t * 0.55 + h1 * 60);
+      const life = Math.sin(TV * 0.55 + h1 * 60);
       if (life > 0.2) {
         const r = clamp((((0.8 + 0.35 * bf) * (life - 0.2)) / q[2]) * cam.F, 0.8, 9);
         FO[cls].rect(q[0] - r * 1.6, q[1] - r * 0.4, r * 3.2, Math.max(1, r * 0.7));
@@ -340,7 +340,7 @@ function waves(sk: Sky, bf: number): void {
   // ondulations lointaines vers l'horizon
   const far = new Path2D();
   for (let k = 0; k < 70; k++) {
-    const h = Math.abs(Math.sin(k * 91.7 + Math.floor(S.t / 3) * 0.37) * 9137.1) % 1, dist = 1500 + h * 9000;
+    const h = Math.abs(Math.sin(k * 91.7 + Math.floor(TV / 3) * 0.37) * 9137.1) % 1, dist = 1500 + h * 9000;
     const y = cam.cy - ((-EYE - (dist * dist) / (2 * RE)) / dist) * cam.F, x = ((k * 0.618 + h * 0.2) % 1) * W, len = 4 + 30 * (1500 / dist);
     far.rect(x - len, y, 2 * len, 1);
   }
@@ -366,8 +366,8 @@ function reflect(water: [number, number, number] | null, top: [number, number, n
   const len = Math.min(60, Math.max(4, (top[1] - water[1]) * -1.1)), bf = beaufort(S.env.windKn);
   ctx.fillStyle = `rgba(${col},${a * 0.28})`;
   for (let k = 0; k < len; k += 2) {
-    const w = 1 + (bf >= 3 ? Math.abs(Math.sin(k * 1.7 + S.t * 3)) * 2 : 0.6);
-    if (Math.sin(k * 0.9 + S.t * 2.3) > -0.3) ctx.fillRect(water[0] - w / 2, water[1] + k, w, 1.4);
+    const w = 1 + (bf >= 3 ? Math.abs(Math.sin(k * 1.7 + TV * 3)) * 2 : 0.6);
+    if (Math.sin(k * 0.9 + TV * 2.3) > -0.3) ctx.fillRect(water[0] - w / 2, water[1] + k, w, 1.4);
   }
 }
 
@@ -712,9 +712,9 @@ function drawTarget(t: Target, d: number, sk: Sky): void {
 
 /** Rythmes simplifiés des feux des marques (caractères non vérifiés pour la plupart : illustration). */
 export function flashOn(kind: string, id: string): boolean {
-  const ph = (S.t + id.charCodeAt(0) * 1.7) % 15;
+  const ph = (TV + id.charCodeAt(0) * 1.7) % 15;
   switch (kind) {
-    case 'N': return (S.t * 1.0) % 1 < 0.3;
+    case 'N': return (TV * 1.0) % 1 < 0.3;
     case 'E': return ph < 3 && ph % 1 < 0.3;
     case 'S': return (ph < 6 && ph % 1 < 0.3) || (ph >= 6.5 && ph < 8.5);
     case 'W': return ph < 9 && ph % 1 < 0.3;
@@ -730,11 +730,11 @@ function drawMarks(sk: Sky, bf: number): void {
   const cols: Record<string, string[]> = { N: ['#f4d000', '#111'], S: ['#111', '#f4d000'], E: ['#111', '#f4d000', '#111'], W: ['#f4d000', '#111', '#f4d000'], special: ['#f4d000'], safe: ['#c81e1e', '#f0f0f0'] };
   for (const m of CHART.marks) {
     const dx = m.x * NM - cam.ex, dy = m.y * NM - cam.ey, d = Math.hypot(dx, dy);
-    if (m.kind === 'lh') { lighthouse(m, dx, dy, d, sk); continue; }
+    if (m.kind === 'lh' || m.kind === 'port') { lighthouse(m, dx, dy, d, sk); continue; }
     if (d > 13 * NM) continue;
     const v = veil(d, sk.vis), ph = m.id.charCodeAt(0) * 0.37 + m.id.length;
-    const bob = m.kind === 'lv' ? hs * 0.08 * Math.sin(S.t * 0.5 + ph) : hs * 0.18 * Math.sin(S.t * 1.25 + ph);
-    const stub = { x: m.x, y: m.y, hdg: (S.env.windFrom + 15 * Math.sin(S.t * 0.2 + ph)) % 360 };
+    const bob = m.kind === 'lv' ? hs * 0.08 * Math.sin(TV * 0.5 + ph) : hs * 0.18 * Math.sin(TV * 1.25 + ph);
+    const stub = { x: m.x, y: m.y, hdg: (S.env.windFrom + 15 * Math.sin(TV * 0.2 + ph)) % 360 };
     const shade = (c: string) => mix(sk.night ? dark(hex(c), 0.05) : hex(c), sk.hor, v);
     let zl = 5.2 + bob;
     if (v < 0.98) {
@@ -762,7 +762,7 @@ function drawMarks(sk: Sky, bf: number): void {
     }
     const lit = m.kind === 'special' ? 'Y' : 'W';
     const a = lightAlpha(d, m.kind === 'lv' ? 12 : 4, sk);
-    if (a > 0 && (m.light ? charOn(m.light, S.t + m.id.length * 1.3) : flashOn(m.kind, m.id))) {
+    if (a > 0 && (m.light ? lightOn(m.light, TV + m.id.length * 1.3) : flashOn(m.kind, m.id))) {
       const q = proj(dx, dy, zl);
       if (q) { reflect(proj(dx, dy, 0), q, LIGHT[lit], a); glow(q[0], q[1], LIGHT[lit], a, m.kind === 'lv' ? 1.5 : 1); }
     }
@@ -770,19 +770,40 @@ function drawMarks(sk: Sky, bf: number): void {
 }
 
 /**
- * Phare à terre : tour blanche de jour (à moins de 8 NM), feu de grande portée la nuit. Le feu est caché par la terre
+ * Phare à terre ou feu de port : tour blanche de jour (à moins de 8 NM), feu de grande portée la nuit. Le feu est caché par la terre
  * située devant lui (rayons de côte) et sous l'horizon au-delà de sa portée géographique (élévation du feu et de l'œil).
  */
 function lighthouse(m: (typeof CHART.marks)[number], dx: number, dy: number, d: number, sk: Sky): void {
   const z = m.elev ?? 40, dNM = d / NM, b = brgOf(dx, dy), co = S.coast;
   if (co && co.r0[rayIndex(b)] < dNM - 0.6) return;
   if (dNM > 2.08 * (Math.sqrt(z) + Math.sqrt(EYE))) return;
-  const v = veil(d, sk.vis), stub = { x: m.x, y: m.y, hdg: 0 };
-  if (!sk.night && v < 0.95 && dNM < 8) solid(stub, box(-3, 3, 3, z - 18, z + 2), mix(hex('#eeeeea'), sk.hor, v));
-  const a = lightAlpha(d, m.range ?? 15, sk);
-  if (a > 0 && charOn(m.light ?? 'Fl 10s', S.t + m.id.length * 1.7)) {
+  const v = veil(d, sk.vis), stub = { x: m.x, y: m.y, hdg: 0 }, port = m.kind === 'port', col = lightColour(m.light);
+  if (!sk.night && v < 0.95) {
+    // phare : tour blanche ; feu de port : tourelle rouge (bâbord) ou verte (tribord) selon la couleur du feu (IALA A)
+    if (!port && dNM < 8) solid(stub, box(-3, 3, 3, z - 18, z + 2), mix(hex('#eeeeea'), sk.hor, v));
+    if (port && dNM < 4) {
+      const tc = col === 'R' ? '#b8302a' : col === 'G' ? '#2f7a3a' : '#e4e2da';
+      solid(stub, box(-1.6, 1.6, 1.6, 0, Math.max(3, z - 3)), mix(hex('#8d8a82'), sk.hor, v));
+      solid(stub, box(-1.1, 1.1, 1.1, Math.max(3, z - 3), z + 1), mix(hex(tc), sk.hor, v));
+    }
+  }
+  // éclairage des quais la nuit, autour des feux de port
+  if (port && sk.night && S.env.vis !== 'poor' && dNM < 8) {
+    const k = clamp(1 - dNM / 8, 0, 1);
+    ctx.fillStyle = `rgba(${LIGHT.A},${0.25 + 0.5 * k})`;
+    for (let i = 0; i < 5; i++) {
+      const h = Math.abs(Math.sin((m.id.charCodeAt(0) + i * 7.3) * 12.9898) * 43758.5453) % 1;
+      const q = proj(dx + (h - 0.5) * 500, dy + (((h * 7) % 1) - 0.5) * 500, 8 + 10 * h);
+      if (q) ctx.fillRect(q[0] - 1, q[1] - 1, 2, 2);
+    }
+  }
+  const a = lightAlpha(d, m.range ?? (port ? 5 : 15), sk);
+  if (a > 0 && lightOn(m.light ?? 'Fl 10s', TV + m.id.length * 1.7)) {
     const q = proj(dx, dy, z);
-    if (q) glow(q[0], q[1], LIGHT.W, a, 1.6);
+    if (q) {
+      if (port && d < Math.sqrt(2 * EYE * RE)) reflect(proj(dx, dy, 0), q, LIGHT[col], a);
+      glow(q[0], q[1], LIGHT[col], a, port ? 1.1 : 1.6);
+    }
   }
 }
 

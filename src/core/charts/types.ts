@@ -6,8 +6,8 @@ export type LL = [number, number];
 export const dm = (d: number, m: number): number => (d < 0 || Object.is(d, -0) ? d - m / 60 : d + m / 60);
 export const P = (latD: number, latM: number, lonD: number, lonM: number): LL => [dm(latD, latM), dm(lonD, lonM)];
 
-/** lh : phare à terre (pas d'écho radar propre, feu de grande portée). */
-export type MarkKind = 'N' | 'S' | 'E' | 'W' | 'special' | 'safe' | 'lv' | 'light' | 'lh';
+/** lh : phare à terre (pas d'écho radar propre, feu de grande portée) ; port : feu de port (musoir de jetée ou de digue). */
+export type MarkKind = 'N' | 'S' | 'E' | 'W' | 'special' | 'safe' | 'lv' | 'light' | 'lh' | 'port';
 export interface ChartMark { id: string; name: string; lat: number; lon: number; kind: MarkKind; light?: string; range?: number; elev?: number; approx?: boolean; racon?: boolean; src: string }
 export interface ChartBank { name: string; lat: number; lon: number; len: number; wid: number; orient: number; min: number; src: string }
 export interface TssZone { id: string; name: string; pts: LL[] }

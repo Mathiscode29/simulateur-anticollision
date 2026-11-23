@@ -7,6 +7,14 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.5 — 23 novembre 2026
+Correction de la vue extérieure, défilement fluide, ports et feux.
+- Correction : la texture de la mer dérivait à la vitesse de phase des vagues (≈ 10 m/s) dans le lit du vent, ce qui donnait l'impression que le navire avançait en travers de son vecteur radar. Elle suit désormais l'eau (courant et légère dérive due au vent).
+- Défilement fluide : la vue extérieure interpole positions et caps entre deux pas de simulation (0,25 s) et tourne à pleine cadence, avec repli à 30 images/s seulement si l'ordinateur peine.
+- Ports et feux : feux de port des musoirs de Dover, Boulogne, Calais, Gravelines, Dunkerque, Tarifa, Algeciras, Gibraltar, Ceuta et Tanger ; phares de Dungeness, Folkestone, Dover, Cap d'Alprech, Cap Gris-Nez, Calais, Dunkerque, Punta Cires, Malabata et Cap Spartel ; Tarifa précisé (Fl(3) WR 10s). Positions et caractères d'après les livres des feux de la NGA (Pub. 113 et 114, domaine public).
+- Vue extérieure : tourelles rouges ou vertes sur les musoirs de jour, éclairage des quais la nuit, reflets des feux de port ; rythmes des feux complétés (Q, VQ, Fl(2+1), Oc(2), F).
+- ECDIS : feux de port (virgule rouge, verte ou magenta selon la couleur du feu), nom affiché à partir de l'échelle 3 NM. Radar : écho des musoirs.
+
 ## V1.4 — 23 novembre 2026
 Navires au mouillage et signaux sonores.
 - Navires au mouillage (R30) : immobiles, évités au vent (au courant par vent faible), deux feux blancs tous horizons (l'avant plus haut), ponts éclairés à partir de 100 m, boule noire de jour, statut AIS « au mouillage » (message toutes les 3 min). Le navire qui fait route les évite, porteur comme trafic (R2, R8) ; bilan : marge de passage, passage sur l'avant d'un navire au mouillage signalé.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { S } from '../src/core/state';
 import { applyScenarioEnv, mkT, newScenario } from '../src/sim/scenarios';
-import { dayShapes, navLights3D, shipKind } from '../src/sim/visual';
+import { dayShapes, lightColour, lightOn, navLights3D, shipKind } from '../src/sim/visual';
+import { GIBRALTAR } from '../src/core/charts/gibraltar';
+import { PAS_DE_CALAIS } from '../src/core/charts/pasdecalais';
 
 function fresh() {
   S.scen = 'r15'; applyScenarioEnv('r15'); S.env.faults = 'off'; newScenario(); S.targets = [];
@@ -61,5 +63,34 @@ describe('silhouettes de la vue extérieure', () => {
     expect(shipKind({ type: 'fish', name: 'Chalutier en pêche' })).toBe('fish');
     expect(shipKind({ type: 'sail', name: 'Voilier' })).toBe('sail');
     expect(shipKind({ type: 'ram', name: 'câblier' })).toBe('ram');
+  });
+});
+
+describe('feux de port et caractères des feux', () => {
+  /** Nombre d'allumages (fronts montants) sur une période, échantillonné au 1/20 s. */
+  const flashes = (light: string, per: number) => { let n = 0, prev = false; for (let t = 0; t < per; t += 0.05) { const on = lightOn(light, t); if (on && !prev) n++; prev = on; } return n; };
+  it('couleur principale du feu', () => {
+    expect(['Fl(2) R 6s', 'Q G', 'Iso G 3s', 'Fl(4) WR 10s', 'Fl(4)WR 20s', 'Fl 5s', 'Fl(4)Y 15s', 'Oc(2) R 6s'].map(lightColour)).toEqual(['R', 'G', 'G', 'W', 'W', 'W', 'Y', 'R']);
+  });
+  it('rythmes : groupes d’éclats, éclats rapides, occultations', () => {
+    expect(flashes('Fl(3) 15s', 15)).toBe(3);
+    expect(flashes('Fl(2+1) 15s', 15)).toBe(3);
+    expect(flashes('Q G', 10)).toBe(10);
+    expect(flashes('Fl R 2.5s', 10)).toBe(4);
+    expect(flashes('Oc(2) R 6s', 6)).toBe(2); // deux occultations par période
+    expect(lightOn('Iso G 3s', 0.5)).toBe(true);
+    expect(lightOn('Iso G 3s', 2)).toBe(false);
+  });
+  it('feux de port sourcés, dans l’emprise des cartes', () => {
+    for (const c of [GIBRALTAR, PAS_DE_CALAIS]) {
+      const ports = c.marks.filter((m) => m.kind === 'port');
+      expect(ports.length).toBeGreaterThan(5);
+      for (const m of ports) {
+        expect(m.light).toBeTruthy();
+        expect(m.src).toMatch(/NGA/);
+        expect(m.lat).toBeGreaterThan(c.bbox[0]); expect(m.lat).toBeLessThan(c.bbox[1]);
+        expect(m.lon).toBeGreaterThan(c.bbox[2]); expect(m.lon).toBeLessThan(c.bbox[3]);
+      }
+    }
   });
 });

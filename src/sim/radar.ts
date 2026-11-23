@@ -116,7 +116,7 @@ export function radarStep(dt: number): void {
     if (!inSweep(b, a0, d)) continue;
     const r = Math.hypot(dx, dy);
     if (masked(b, r)) continue;
-    const rcs = m.kind === 'lv' ? 3 : 0.4, rmax = 3 + 6 * Math.sqrt(rcs);
+    const rcs = m.kind === 'lv' ? 3 : m.kind === 'port' ? 0.8 : 0.4, rmax = 3 + 6 * Math.sqrt(rcs);
     const s = ((rcs * (0.6 + 0.8 * Math.random())) / (1 + Math.pow(r / rmax, 4))) * rainAttenuation(m.x, m.y);
     if (s >= Math.max(gainThreshold(), seaLevel() * 1.4 * Math.exp(-r / clutR()))) S.markEcho[m.id] = { t: tc(b), tp: S.markEcho[m.id]?.t ?? -1e9 };
   }

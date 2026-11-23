@@ -133,3 +133,36 @@ export function shipKind(t: Pick<Target, 'type' | 'name'>): ShipKind {
   if (t.type === 'small') return 'coaster';
   return 'cargo';
 }
+
+/**
+ * Caractère d'un feu (notation des livres des feux : Fl, Fl(n), Fl(n+m), Q, VQ, Iso, Oc, Oc(n), Mo(A), F) :
+ * allumé à l'instant t (s) ? Rythmes simplifiés : éclat 0,5 s, groupes espacés de 1,4 s, éclipse 1 s.
+ */
+export function lightOn(light: string, t: number): boolean {
+  const s = light.trim();
+  if (/^VQ/.test(s)) return ((t % 0.5) + 0.5) % 0.5 < 0.25;
+  if (/^Q/.test(s)) return ((t % 1) + 1) % 1 < 0.5;
+  if (/^F(\s|$)/.test(s)) return true;
+  const per = Number(/(\d+(?:\.\d+)?)\s*s\b/.exec(s)?.[1] ?? 10), ph = ((t % per) + per) % per;
+  const grp = /^Fl\s*\((\d+)(?:\+(\d+))?\)/.exec(s);
+  if (grp) {
+    const n = Number(grp[1]), m = grp[2] ? Number(grp[2]) : 0;
+    if (ph < n * 1.4) return ph % 1.4 < 0.5;
+    const p2 = ph - n * 1.4 - 1.6;
+    return m > 0 && p2 >= 0 && p2 < m * 1.4 && p2 % 1.4 < 0.5;
+  }
+  if (/^Iso/.test(s)) return ph < per / 2;
+  if (/^Oc/.test(s)) {
+    const n = Number(/^Oc\s*\((\d+)\)/.exec(s)?.[1] ?? 1);
+    for (let k = 0; k < n; k++) if (ph >= k * 2 && ph < k * 2 + 1) return false;
+    return true;
+  }
+  if (/Mo\s*\(A\)/.test(s)) return ph < 0.5 || (ph >= 1 && ph < 2.5);
+  return ph < 0.6;
+}
+
+/** Couleur principale d'un feu d'après son caractère (« Fl(2) R 6s » → R ; secteurs « WR » → W ; défaut blanc). */
+export function lightColour(light?: string): 'W' | 'R' | 'G' | 'Y' {
+  const m = light ? /(?:\)|\b)([WRGY]{1,3})\b/.exec(light.replace(/^[A-Za-z]+/, '')) : null;
+  return (m ? m[1][0] : 'W') as 'W' | 'R' | 'G' | 'Y';
+}

@@ -9,6 +9,7 @@
  * (image des zones de profondeur, Path2D de la terre et des isobathes en coordonnées géographiques, dessinés
  * avec une seule transformation affine) ; seules les couches dynamiques sont recalculées à chaque image.
  */
+import { lightColour } from '../sim/visual';
 import { S } from '../core/state';
 import { D2R, brgOf, clamp, n360, p3, vec } from '../core/util';
 import { fmtLat, fmtLon, toLL, toXY } from '../core/geo';
@@ -308,14 +309,18 @@ function drawMarks(pal: EPal, fs: number): void {
     const q = toScr(m.x, m.y);
     if (q[0] < -30 || q[1] < -30 || q[0] > W + 30 || q[1] > H + 30) continue;
     ctx.globalAlpha = dim;
-    // feu : virgule magenta
-    ctx.fillStyle = pal.mag; ctx.beginPath(); ctx.ellipse(q[0] + 7, q[1] - 9, 3, 7, 0.6, 0, 7); ctx.fill();
+    // feu : virgule magenta (rouge ou verte pour un feu rouge ou vert)
+    const lc = lightColour(m.light);
+    ctx.fillStyle = lc === 'R' ? '#d01c1c' : lc === 'G' ? '#16a34a' : pal.mag; ctx.beginPath(); ctx.ellipse(q[0] + 7, q[1] - 9, 3, 7, 0.6, 0, 7); ctx.fill();
     if (m.kind === 'lh') {
       // phare : étoile (point et cercle), feu de grande portée
       ctx.fillStyle = pal.text; ctx.strokeStyle = pal.text; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(q[0], q[1], 2.2, 0, 7); ctx.fill();
       ctx.beginPath(); ctx.arc(q[0], q[1], 5.5, 0, 7); ctx.stroke();
       for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; line([q[0] + Math.cos(a) * 5.5, q[1] + Math.sin(a) * 5.5], [q[0] + Math.cos(a) * 9, q[1] + Math.sin(a) * 9]); }
+    } else if (m.kind === 'port') {
+      // feu de port : point (structure) sous la virgule
+      ctx.fillStyle = pal.text; ctx.beginPath(); ctx.arc(q[0], q[1], 2, 0, 7); ctx.fill();
     } else if (m.kind === 'lv') {
       ctx.fillStyle = '#d01c1c'; ctx.strokeStyle = pal.text; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(q[0] - 8, q[1] - 2); ctx.lineTo(q[0] + 8, q[1] - 2); ctx.lineTo(q[0] + 5, q[1] + 3); ctx.lineTo(q[0] - 5, q[1] + 3); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -336,7 +341,7 @@ function drawMarks(pal: EPal, fs: number): void {
       }
     }
     ctx.globalAlpha = 1;
-    if (S.ecdis.layers.names) {
+    if (S.ecdis.layers.names && (m.kind !== 'port' || view.range <= 3)) {
       ctx.fillStyle = pal.text;
       ctx.fillText(`${m.approx ? '≈' : ''}${m.name}${m.light ? ' ' + m.light : ''}${m.range ? ' ' + m.range + 'M' : ''}${m.racon ? ' Racon' : ''}`, q[0] + 12, q[1] - 2);
     }
@@ -558,7 +563,7 @@ export function pickedInfo(): string[] {
   if (p.kind === 'mark') {
     const m = CHART.marks.find((x) => x.id === p.id);
     if (!m) return [];
-    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse', lh: 'phare' };
+    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse', lh: 'phare', port: 'feu de port' };
     return [`${m.name} — ${kinds[m.kind]}`, `${fmtLat(m.lat)} ${fmtLon(m.lon)}${m.approx ? ' (position approchée)' : ''}`, m.light ? `Feu ${m.light}${m.range ? `, portée ${m.range} M` : ''}` : m.range ? `Portée ${m.range} M (caractère non renseigné)` : '', `Relèvement / distance : ${rb(m.x, m.y)}`, `Source : ${m.src}`];
   }
   return ['Navire porteur', `${fmtLat(toLL(o.x, o.y).lat)} ${fmtLon(toLL(o.x, o.y).lon)}`, `Tirant d'eau ${o.ship.mmg.d.toFixed(1)} m`];
