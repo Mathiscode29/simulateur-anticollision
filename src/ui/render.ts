@@ -299,6 +299,14 @@ export function draw(): void {
         const f = m / n, px = ox + (q[0] - ox) * f, py = oy + (q[1] - oy) * f, l = m % 2 ? 2.5 : 4.5;
         line(px - uy * l, py + ux * l, px + uy * l, py - ux * l);
       }
+      // petite flèche blanche (double chevron) au bout du vecteur
+      ctx.lineWidth = 1.5;
+      for (const d of [0, 5]) {
+        const tx = q[0] - ux * d, ty = q[1] - uy * d;
+        ctx.beginPath();
+        ctx.moveTo(tx - ux * 6 - uy * 4, ty - uy * 6 + ux * 4); ctx.lineTo(tx, ty); ctx.lineTo(tx - ux * 6 + uy * 4, ty - uy * 6 - ux * 4);
+        ctx.stroke();
+      }
     }
   }
   if (R.trial && R.vec === 'TRUE') {
