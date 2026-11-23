@@ -5,17 +5,26 @@
  * Cartes :
  *  - « open » : zone d'entraînement au large (eau profonde, sans terre), utilisée par les exercices historiques ;
  *  - « pdc »  : Pas-de-Calais (voir src/core/charts/pasdecalais.ts pour les sources et les limites) ;
- *  - « gib »  : détroit de Gibraltar (voir src/core/charts/gibraltar.ts).
+ *  - « gib »  : détroit de Gibraltar (voir src/core/charts/gibraltar.ts) ;
+ *  - « lh »   : Le Havre, son chenal et ses bassins (src/core/charts/lehavre.ts) ;
+ *  - « ush »  : Ouessant et son DST (src/core/charts/ouessant.ts).
  */
 import { PAS_DE_CALAIS } from '../core/charts/pasdecalais';
 import { GIBRALTAR } from '../core/charts/gibraltar';
-import type { ChartBank, ChartMark, ChartSource, Relief } from '../core/charts/types';
+import { LE_HAVRE } from '../core/charts/lehavre';
+import { OUESSANT } from '../core/charts/ouessant';
+import { band, type ChartBank, type ChartMark, type ChartSource, type Relief, type UrbanKind } from '../core/charts/types';
 import { setGeoRef, toXY } from '../core/geo';
 import { brgOf, clamp, vec } from '../core/util';
 
-export type ChartKey = 'open' | 'pdc' | 'gib';
+export type ChartKey = 'open' | 'pdc' | 'gib' | 'lh' | 'ush';
 export interface XY { x: number; y: number }
-export interface LaneG { id: string; name: string; polys: XY[][]; axis: XY[] }
+/** Voie suivie par le trafic ; arrive : voie d'entrée de port (le navire s'arrête au bout de l'axe). */
+export interface LaneG { id: string; name: string; polys: XY[][]; axis: XY[]; arrive?: boolean }
+/** Chenal (R9) en plan local : axe orienté vers l'entrée du port, polygone, largeur (NM), profondeur (m). */
+export interface FairwayG { id: string; name: string; axis: XY[]; poly: XY[]; width: number; depth: number }
+/** Bloc de la vue extérieure : centre (NM), emprise w × d et hauteur h (m), base z0, orientation rot (°). */
+export interface BlockG { x: number; y: number; w: number; d: number; h: number; z0: number; rot: number; kind: UrbanKind; col: string; name?: string }
 export interface AnchG { name: string; x: number; y: number; r: number }
 export interface ZoneG { id: string; name: string; poly: XY[] }
 export interface Grid { x0: number; y0: number; dx: number; nx: number; ny: number; d: Float32Array }
@@ -24,6 +33,7 @@ export interface Chart {
   key: ChartKey; name: string; lat0: number; lon0: number;
   land: XY[][]; lanes: LaneG[]; zones: ZoneG[]; lines: XY[][]; itz: ZoneG[]; dw: XY[][]; prec: ZoneG[]; anch: AnchG[];
   marks: (ChartMark & XY)[]; banks: (ChartBank & XY)[];
+  fairways: FairwayG[]; fwLanes: LaneG[]; dredged: { poly: XY[]; depth: number }[]; maxDredged: number; blocks: BlockG[]; urban: { name: string; poly: XY[] }[];
   /** Relief de la vue extérieure (plan local) : altitude de base et sommets. */
   landBase: number; relief: { x: number; y: number; h: number; r: number; cliff: boolean }[];
   grid: Grid | null;
@@ -38,10 +48,11 @@ export interface Chart {
 const OPEN: Chart = {
   key: 'open', name: 'Zone d\'entraînement au large (eau profonde)', lat0: 47.5, lon0: -6.5,
   land: [], lanes: [], zones: [], lines: [], itz: [], dw: [], prec: [], anch: [], marks: [], banks: [], grid: null, landBase: 18, relief: [],
+  fairways: [], fwLanes: [], dredged: [], maxDredged: 0, blocks: [], urban: [],
   edges: new Float64Array(0), deep: 2000, attribution: 'Zone d\'entraînement fictive en eau profonde',
 };
 
-const SOURCES: Record<Exclude<ChartKey, 'open'>, ChartSource> = { pdc: PAS_DE_CALAIS, gib: GIBRALTAR };
+const SOURCES: Record<Exclude<ChartKey, 'open'>, ChartSource> = { pdc: PAS_DE_CALAIS, gib: GIBRALTAR, lh: LE_HAVRE, ush: OUESSANT };
 const cache: Partial<Record<ChartKey, Chart>> = { open: OPEN };
 /** Carte courante. */
 export let CHART: Chart = OPEN;
@@ -74,9 +85,53 @@ function compile(s: ChartSource): Chart {
     marks: s.marks.map((m) => ({ ...m, ...toXY(m.lat, m.lon, ref) })),
     banks: s.banks.map((b) => ({ ...b, ...toXY(b.lat, b.lon, ref) })),
     grid: null, edges: Float64Array.from(e), deep: s.baseDepth, attribution: s.attribution,
+    fairways: (s.fairways ?? []).map((f) => ({ id: f.id, name: f.name, axis: f.axis.map(llxy), poly: band(f.axis, f.width).map(llxy), width: f.width, depth: f.depth })),
+    fwLanes: [], dredged: [], maxDredged: 0, blocks: [], urban: (s.urban ?? []).map((u) => ({ name: u.name, poly: u.pts.map(llxy) })),
   };
+  // deux voies par chenal pour le trafic : entrante (à droite de l'axe en entrant, s'arrête au port) et sortante
+  for (const f of s.fairways ?? []) {
+    const poly = band(f.axis, f.width).map(llxy), q = f.width / 4;
+    const full = [...f.axis, ...(f.inner ?? [])];
+    c.fwLanes.push({ id: `${f.id}in`, name: `${f.name}, entrée`, polys: [poly], axis: offsetLL(full, q).map(llxy), arrive: true });
+    c.fwLanes.push({ id: `${f.id}out`, name: `${f.name}, sortie`, polys: [poly], axis: offsetLL([...full].reverse(), q).map(llxy) });
+  }
+  c.dredged = [...c.fairways.map((f) => ({ poly: f.poly, depth: f.depth })), ...(s.dredged ?? []).map((d) => ({ poly: d.pts.map(llxy), depth: d.depth }))];
+  c.maxDredged = Math.max(0, ...c.dredged.map((d) => d.depth));
+  c.blocks = buildBlocks(c, s);
   c.grid = buildGrid(c, s);
   return c;
+}
+
+/** Hachage déterministe dans [0, 1[. */
+const hsh = (i: number): number => Math.abs(Math.sin(i * 12.9898 + 78.233) * 43758.5453) % 1;
+
+/** Blocs de la vue extérieure : quartiers générés sur une trame (sur la terre seulement) et repères. */
+function buildBlocks(c: Chart, s: ChartSource): BlockG[] {
+  const out: BlockG[] = [], NMm = 1852;
+  let seed = 1;
+  for (const z of s.urban ?? []) {
+    const poly = z.pts.map(llxy), xs = poly.map((p) => p.x), ys = poly.map((p) => p.y), st = z.step / NMm;
+    for (let y = Math.min(...ys); y <= Math.max(...ys); y += st) for (let x = Math.min(...xs); x <= Math.max(...xs); x += st) {
+      const a = hsh(seed++), b = hsh(seed++), px = x + (a - 0.5) * st * 0.3, py = y + (b - 0.5) * st * 0.3;
+      if (!inPoly(poly, px, py) || !c.land.some((r) => inPoly(r, px, py))) continue;
+      if (hsh(seed++) < 0.12) continue; // places, parcs
+      const h = z.h[0] + (z.h[1] - z.h[0]) * hsh(seed++) ** 1.5;
+      out.push({ x: px, y: py, w: z.step * (0.45 + 0.3 * hsh(seed++)), d: z.step * (0.45 + 0.3 * hsh(seed++)), h, z0: 0, rot: 0, kind: 'bld', col: z.col ?? '#cfc8b8' });
+    }
+  }
+  for (const m of s.landmarks ?? []) out.push({ ...toXY(m.lat, m.lon, ref), w: m.w, d: m.d, h: m.h, z0: m.z0 ?? 0, rot: m.rot ?? 0, kind: m.kind, col: m.col ?? '#d8d4c8', name: m.name });
+  return out;
+}
+
+/** Décalage latéral d'une ligne géographique (d NM, > 0 à droite). */
+function offsetLL(pts: [number, number][], d: number): [number, number][] {
+  const la0 = pts[0][0], k = Math.cos((la0 * Math.PI) / 180);
+  const xy = pts.map(([la, lo]) => [lo * 60 * k, la * 60]);
+  return xy.map((p, i) => {
+    const a = xy[Math.max(0, i - 1)], b = xy[Math.min(xy.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const n = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L];
+    return [(p[1] + n[1] * d) / 60, (p[0] + n[0] * d) / (60 * k)] as [number, number];
+  });
 }
 
 // ---------------------------------------------------------------- géométrie
@@ -138,7 +193,7 @@ const LAND_D = -10;
  *  - bancs en « gélule » : profondeur minimale sur l'axe, remontée lissée sur 0,9 NM de part et d'autre.
  */
 function buildGrid(c: Chart, s: ChartSource): Grid {
-  const [la0, la1, lo0, lo1] = s.bbox, a = toXY(la0, lo0, ref), b = toXY(la1, lo1, ref), dx = 0.2;
+  const [la0, la1, lo0, lo1] = s.bbox, a = toXY(la0, lo0, ref), b = toXY(la1, lo1, ref), dx = s.gridStep ?? 0.2;
   const nx = Math.ceil((b.x - a.x) / dx) + 1, ny = Math.ceil((b.y - a.y) / dx) + 1;
   const N = nx * ny, dist = new Float32Array(N).fill(1e9), d = new Float32Array(N);
   // terre : balayage ligne par ligne
@@ -175,6 +230,8 @@ function buildGrid(c: Chart, s: ChartSource): Grid {
     const x = a.x + i * dx, y = a.y + j * dx;
     let v = base * (1 - Math.exp(-(dist[k] * dx) / sc));
     for (const bk of c.banks) v = Math.min(v, bankDepth(bk, x, y, base));
+    // chenaux et bassins dragués : profondeur imposée (au moins celle de la souille)
+    for (const z of c.dredged) if (inPoly(z.poly, x, y)) v = Math.max(v, z.depth);
     d[k] = v;
   }
   return { x0: a.x, y0: a.y, dx, nx, ny, d };
@@ -198,7 +255,12 @@ export function depthAt(x: number, y: number, c: Chart = CHART): number {
   if (fx < 0 || fy < 0 || fx >= g.nx - 1 || fy >= g.ny - 1) return c.deep;
   const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j, k = j * g.nx + i;
   const a = g.d[k], b = g.d[k + 1], cc = g.d[k + g.nx], dd = g.d[k + g.nx + 1];
-  return (a * (1 - tx) + b * tx) * (1 - ty) + (cc * (1 - tx) + dd * tx) * ty;
+  const v = (a * (1 - tx) + b * tx) * (1 - ty) + (cc * (1 - tx) + dd * tx) * ty;
+  // chenaux et bassins dragués : profondeur exacte jusqu'au quai (la grille lisse les bords sur une maille)
+  if (c.dredged.length && v < c.maxDredged) {
+    for (const z of c.dredged) if (inPoly(z.poly, x, y) && !c.land.some((r) => inPoly(r, x, y))) return Math.max(v, z.depth);
+  }
+  return v;
 }
 
 /** Vrai si le point est à terre (polygones OSM). */
@@ -253,7 +315,10 @@ export function tssAt(x: number, y: number, c: Chart = CHART): TssInfo {
   return { kind: 'none', name: c.lanes.length ? 'Hors DST' : 'Large', dir: null, lane: null };
 }
 
-export const laneOf = (id: string, c: Chart = CHART): LaneG | undefined => c.lanes.find((l) => l.id === id);
+export const laneOf = (id: string, c: Chart = CHART): LaneG | undefined => c.lanes.find((l) => l.id === id) ?? c.fwLanes.find((l) => l.id === id);
+
+/** Chenal (R9) contenant le point, s'il y en a un. */
+export const fairwayAt = (x: number, y: number, c: Chart = CHART): FairwayG | undefined => c.fairways.find((f) => inPoly(f.poly, x, y));
 
 /**
  * Cap de consigne d'un navire qui suit une voie : poursuite d'un point situé 1,5 NM plus loin sur l'axe,

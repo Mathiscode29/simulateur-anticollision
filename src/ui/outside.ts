@@ -18,10 +18,10 @@
  * - Console d'instruments (répétiteur gyro, axiomètre, indicateur de taux de giration ROT, loch, machine, anémomètre, sondeur).
  * Niveau de détail volontairement limité pour rester fluide.
  */
-import { S, type Target } from '../core/state';
+import { S, ownDraft, type Target } from '../core/state';
 import { TELE } from '../core/data';
 import { D2R, K2N, adiff, brgOf, clamp, n360, p3 } from '../core/util';
-import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
+import { CHART, NRAYS, depthAt, rayIndex, type BlockG } from '../sim/chart';
 import { simFrac } from './render';
 import { dayShapes, lightColour, lightOn, mastH, navLights3D, shipKind } from '../sim/visual';
 import { OWN, audibleRange, patText, sideOf } from '../sim/sound';
@@ -189,6 +189,7 @@ export function drawOutside(): void {
   if (sk.night && S.env.vis !== 'poor') stars(yH);
   else if (S.env.vis !== 'poor') clouds(sk, yH);
   drawCoast(sk, hf);
+  drawBlocks(sk);
   waves(sk, bf);
   drawMarks(sk, bf);
   // cibles, de la plus lointaine à la plus proche
@@ -258,27 +259,34 @@ function drawCoast(sk: Sky, hf: number): void {
     const f = d * cr;
     if (f < 50) continue;
     // ligne de crête : élévation angulaire maximale le long du rayon, sur la terre traversée (relief en retrait de la côte)
-    let lh = landHeight(hx, hy), el = (lh.h - EYE - (d * d) / (2 * RE)) / d;
+    const lh0 = landHeight(hx, hy), el0 = (lh0.h - EYE - (d * d) / (2 * RE)) / d;
+    let lh = lh0, el = el0, dR = d;
     const rEnd = Math.min(co.r1[i], r0 + 4);
     for (let r = r0 + 0.25; r < rEnd; r += 0.25) {
       const q = landHeight(co.ox + sb * r, co.oy + cb * r), dd = r * NM, e = (q.h - EYE - (dd * dd) / (2 * RE)) / dd;
-      if (e > el) { el = e; lh = q; }
+      if (e > el) { el = e; lh = q; dR = dd; }
     }
     const base = -EYE - (d * d) / (2 * RE);
-    // relief en gradins de 15 m (style en blocs) ; légère variation de teinte d'une colonne à l'autre
-    const hq = Math.max(6, Math.ceil((el * d - base) / 15) * 15), yT = cam.cy - ((hq + base) / d / cr) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
+    // relief en gradins de 15 m au-dessus de 25 m (style en blocs), côtes basses à leur hauteur ; légère variation de teinte d'une colonne à l'autre
+    const q15 = (h: number) => (h < 25 ? Math.max(4, Math.round(h)) : Math.ceil(h / 15) * 15);
+    const hq = q15(el * d - base), yT = cam.cy - ((hq + base) / d / cr) * cam.F, yB = d > dH ? cam.yH : cam.cy - (base / f) * cam.F;
     if (yT >= yB) continue;
     const px1 = (yB - yT) / hq, jit = 0.92 + 0.12 * (Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1);
     const x0 = W / 2 + Math.tan((rel - step / 2) * D2R) * cam.F, x1 = W / 2 + Math.tan((rel + step / 2) * D2R) * cam.F;
     const v = veil(d, sk.vis);
     if (v > 0.985) continue;
     const cliff = lh.cliff > 0.35, base3 = cliff && !sk.night ? sk.cliff : sk.land, wx = x1 - x0 + 0.6;
-    ctx.fillStyle = mix(dark(base3, jit), sk.hor, v);
+    // relief en retrait (plus de 0,6 NM derrière la côte) : teinte voilée selon sa propre distance, la côte au premier plan
+    const far = dR - d > 0.6 * NM, vR = far ? veil(dR, sk.vis) : v;
+    const yT0 = far ? Math.max(yT, cam.cy - ((q15(el0 * d - base) + base) / d / cr) * cam.F) : yT;
+    ctx.fillStyle = mix(dark(base3, jit), sk.hor, vR);
     ctx.fillRect(x0, yT, wx, yB - yT);
+    if (far && yT0 > yT) { const c0 = lh0.cliff > 0.35 && !sk.night ? sk.cliff : sk.land; ctx.fillStyle = mix(dark(c0, jit * 0.95), sk.hor, v); ctx.fillRect(x0, yT0, wx, yB - yT0); }
     if (!sk.night) {
       // couche d'herbe au sommet, grève ou pied de falaise au bas
-      ctx.fillStyle = mix(dark(GRASS, jit), sk.hor, v); ctx.fillRect(x0, yT, wx, Math.max(1, (cliff ? 3 : 6) * px1));
-      ctx.fillStyle = mix(cliff ? dark(sk.cliff, 0.8) : SAND, sk.hor, v); ctx.fillRect(x0, yB - Math.max(1, 3 * px1), wx, Math.max(1, 3 * px1));
+      ctx.fillStyle = mix(dark(GRASS, jit), sk.hor, vR); ctx.fillRect(x0, yT, wx, Math.max(1, (cliff ? 3 : 6) * px1));
+      if (far && yT0 > yT) { ctx.fillStyle = mix(dark(GRASS, jit * 0.9), sk.hor, v); ctx.fillRect(x0, yT0, wx, Math.max(1, 2 * px1)); }
+      ctx.fillStyle = mix(lh0.cliff > 0.35 ? dark(sk.cliff, 0.8) : SAND, sk.hor, v); ctx.fillRect(x0, yB - Math.max(1, 3 * px1), wx, Math.max(1, 3 * px1));
     }
     // lumières à terre la nuit
     if (sk.night && S.env.vis !== 'poor' && r0 < 22) {
@@ -543,7 +551,8 @@ function buildModel(t: Target, key: string): Model {
 }
 
 /** Dessine un bloc prismatique : faces latérales tournées vers l'œil, ombrées selon le soleil, et dessus. */
-function drawPart(t: Target, p: Part, sh: (c: RGB, k: number) => string): void {
+type Pose = { x: number; y: number; hdg: number };
+function drawPart(t: Pose, p: Part, sh: (c: RGB, k: number) => string): void {
   const s = Math.sin(t.hdg * D2R), c = Math.cos(t.hdg * D2R), ox = t.x * NM - cam.ex, oy = t.y * NM - cam.ey, n = p.f.length;
   const lo: ([number, number, number] | null)[] = [], hi: ([number, number, number] | null)[] = [];
   for (const [a, b] of p.f) { const x = ox + a * s + b * c, y = oy + a * c - b * s; lo.push(proj(x, y, p.z0)); hi.push(proj(x, y, p.z1)); }
@@ -727,7 +736,7 @@ export function flashOn(kind: string, id: string): boolean {
 /** Bouées (corps, voyant, feu) et bateaux-feux ; les bouées dansent à la houle. */
 function drawMarks(sk: Sky, bf: number): void {
   const hs = HS[bf];
-  const cols: Record<string, string[]> = { N: ['#f4d000', '#111'], S: ['#111', '#f4d000'], E: ['#111', '#f4d000', '#111'], W: ['#f4d000', '#111', '#f4d000'], special: ['#f4d000'], safe: ['#c81e1e', '#f0f0f0'] };
+  const cols: Record<string, string[]> = { N: ['#f4d000', '#111'], S: ['#111', '#f4d000'], E: ['#111', '#f4d000', '#111'], W: ['#f4d000', '#111', '#f4d000'], special: ['#f4d000'], safe: ['#c81e1e', '#f0f0f0'], lr: ['#c81e1e'], lg: ['#1f9a46'] };
   for (const m of CHART.marks) {
     const dx = m.x * NM - cam.ex, dy = m.y * NM - cam.ey, d = Math.hypot(dx, dy);
     if (m.kind === 'lh' || m.kind === 'port') { lighthouse(m, dx, dy, d, sk); continue; }
@@ -757,10 +766,12 @@ function drawMarks(sk: Sky, bf: number): void {
           else if (m.kind === 'E') { cone(top[1] - 3.2 * r, true); cone(top[1] - 1.4 * r, false); }
           else if (m.kind === 'W') { cone(top[1] - 3.2 * r, false); cone(top[1] - 1.4 * r, true); }
           else if (m.kind === 'special') { ctx.beginPath(); ctx.moveTo(top[0] - r, top[1] - 3 * r); ctx.lineTo(top[0] + r, top[1] - r); ctx.moveTo(top[0] + r, top[1] - 3 * r); ctx.lineTo(top[0] - r, top[1] - r); ctx.stroke(); }
+          else if (m.kind === 'lr') { ctx.fillStyle = shade('#c81e1e'); ctx.fillRect(top[0] - r * 0.8, top[1] - 2.4 * r, 1.6 * r, 1.6 * r); } // voyant cylindrique
+          else if (m.kind === 'lg') { ctx.fillStyle = shade('#1f9a46'); cone(top[1] - 2.4 * r, true); } // voyant conique
         }
       }
     }
-    const lit = m.kind === 'special' ? 'Y' : 'W';
+    const lit = m.light ? lightColour(m.light) : m.kind === 'special' ? 'Y' : 'W';
     const a = lightAlpha(d, m.kind === 'lv' ? 12 : 4, sk);
     if (a > 0 && (m.light ? lightOn(m.light, TV + m.id.length * 1.3) : flashOn(m.kind, m.id))) {
       const q = proj(dx, dy, zl);
@@ -803,6 +814,77 @@ function lighthouse(m: (typeof CHART.marks)[number], dx: number, dy: number, d: 
     if (q) {
       if (port && d < Math.sqrt(2 * EYE * RE)) reflect(proj(dx, dy, 0), q, LIGHT[col], a);
       glow(q[0], q[1], LIGHT[col], a, port ? 1.1 : 1.6);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- ville et ouvrages (blocs)
+
+const blockPart = (a0: number, a1: number, b0: number, b1: number, z0: number, z1: number, c: RGB, nt = false): Part =>
+  ({ f: [[a0, b0], [a1, b0], [a1, b1], [a0, b1]], z0, z1, c, nt, ca: (a0 + a1) / 2, cb: (b0 + b1) / 2 });
+const blockCache = new Map<BlockG, Part[]>();
+/** Volumes d'un bloc (repère du bloc : a selon l'orientation rot, b à droite). */
+function blockParts(b: BlockG, base: number): Part[] {
+  let ps = blockCache.get(b);
+  if (ps) return ps;
+  const c = hex(b.col), w = b.w / 2, d = b.d / 2, z = base + b.z0;
+  switch (b.kind) {
+    case 'crane': { // portique à conteneurs : deux paires de pieds, poutre, flèche au-dessus du bassin (vers le sud)
+      const legH = b.h * 0.6;
+      ps = [blockPart(-12, -9, -9, -6, z, z + legH, c), blockPart(-12, -9, 6, 9, z, z + legH, c), blockPart(9, 12, -9, -6, z, z + legH, c), blockPart(9, 12, 6, 9, z, z + legH, c),
+        blockPart(-14, 14, -10, 10, z + legH, z + legH + 6, c), blockPart(-14, 62, -2.5, 2.5, z + legH + 2, z + legH + 5, c), blockPart(-6, 6, -6, 6, z + legH + 6, z + b.h, c)];
+      break;
+    }
+    case 'pylon': // pylône en Y renversé : jambes écartées puis fût
+      ps = [blockPart(-w * 2.2, w * 2.2, -d, d, z, z + b.h * 0.35, c, true), blockPart(-w, w, -d * 0.7, d * 0.7, z + b.h * 0.35, z + b.h, c)];
+      break;
+    default:
+      ps = [blockPart(-w, w, -d, d, z, z + b.h, c)];
+  }
+  blockCache.set(b, ps);
+  return ps;
+}
+
+/** Ville, grues, réservoirs et ponts : blocs triés du plus lointain au plus proche, simplifiés au loin. */
+function drawBlocks(sk: Sky): void {
+  const bl = CHART.blocks;
+  if (!bl.length) return;
+  const list: { b: BlockG; d: number }[] = [];
+  for (const b of bl) {
+    const dx = b.x * NM - cam.ex, dy = b.y * NM - cam.ey, f = dx * cam.sy + dy * cam.cyw;
+    if (f < 30) continue;
+    const d = Math.hypot(dx, dy);
+    if (d > 14 * NM || ((b.h + 10) / d) * cam.F < 1.2 || Math.abs(dx * cam.cyw - dy * cam.sy) > f * 1.3 + 300) continue;
+    list.push({ b, d });
+  }
+  list.sort((u, v) => v.d - u.d);
+  const night = sk.night;
+  for (const { b, d } of list) {
+    const v = veil(d, sk.vis);
+    if (v > 0.985) continue;
+    const lit = night && b.kind === 'tower' && b.h > 100; // tour Saint-Joseph éclairée la nuit
+    const sh = (c: RGB, k: number) => mix(night && !lit ? dark(c, k * 0.07) : dark(c, k), sk.hor, v);
+    const pose = { x: b.x, y: b.y, hdg: b.kind === 'crane' ? 180 : b.rot };
+    const base = b.kind === 'deck' ? 0 : landHeight(b.x, b.y).h * 0.6;
+    const px = (b.h / d) * cam.F;
+    if (px < 4 || b.kind === 'bld' && px < 7) {
+      // au loin : simple aplat vertical
+      const q0 = proj(b.x * NM - cam.ex, b.y * NM - cam.ey, base + b.z0), q1 = proj(b.x * NM - cam.ex, b.y * NM - cam.ey, base + b.z0 + b.h);
+      if (!q0 || !q1) continue;
+      const wpx = Math.max(1, (Math.max(b.w, b.d) / q0[2]) * cam.F);
+      ctx.fillStyle = sh(hex(b.col), 0.85); ctx.fillRect(q0[0] - wpx / 2, q1[1], wpx, q0[1] - q1[1]);
+    } else for (const p of blockParts(b, base)) drawPart(pose, p, sh);
+    // fenêtres éclairées la nuit, feux d'obstacle rouges sur les grands ouvrages
+    if (night && S.env.vis !== 'poor' && d < 7 * NM) {
+      const k = clamp(1 - d / (7 * NM), 0, 1), n = b.kind === 'bld' || b.kind === 'tower' ? 1 + Math.floor(b.h / 12) : 0;
+      ctx.fillStyle = `rgba(${LIGHT.A},${0.3 + 0.5 * k})`;
+      for (let i = 0; i < n; i++) {
+        const hsh = Math.abs(Math.sin((b.x * 1e4 + b.y * 3e3 + i * 7.1) * 12.9898) * 43758.5453) % 1;
+        if (hsh < 0.45) continue;
+        const q = proj(b.x * NM - cam.ex + (hsh - 0.5) * b.w * 0.8, b.y * NM - cam.ey, base + b.z0 + b.h * (0.15 + 0.7 * ((hsh * 13) % 1)));
+        if (q) ctx.fillRect(q[0] - 1, q[1] - 1, 2, 2);
+      }
+      if (b.h > 60 && Math.floor(TV) % 2 === 0) { const q = proj(b.x * NM - cam.ex, b.y * NM - cam.ey, base + b.z0 + b.h + 1); if (q) glow(q[0], q[1], LIGHT.R, 0.7, 0.8); }
     }
   }
 }
@@ -1010,7 +1092,7 @@ function instruments(bf: number): void {
   digit(x, cy + r * 0.62, `${aspd.toFixed(0)} kn ${afrom <= 180 ? 'Td' : 'Bd'} ${Math.round(afrom <= 180 ? afrom : 360 - afrom)}°`, 0.72);
   title(x, `VENT APP. · F${bf}`);
   // 7. sondeur
-  const dp = depthAt(o.x, o.y), ukc = dp - o.ship.mmg.d;
+  const dp = depthAt(o.x, o.y), ukc = dp - ownDraft(o);
   lcd((x += gap), dp > 200 ? ['> 200 m', 'sous quille'] : [`${ukc.toFixed(1)} m`, `fonds ${dp.toFixed(0)} m`], 'SONDEUR');
   ctx.textBaseline = 'alphabetic';
 }

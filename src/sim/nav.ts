@@ -3,11 +3,13 @@
  *  - alarmes ECDIS (inspirées de MSC.232(82)) : franchissement anticipé du contour de sécurité sur le vecteur
  *    route fond (durée d'anticipation réglable), profondeur sous le porteur inférieure au contour de sécurité ;
  *  - échouement quand la profondeur devient inférieure au tirant d'eau (fin de l'exercice) ;
- *  - suivi de la règle 10 (DST) : voie et sens de circulation, traversées, zone de séparation, zone côtière.
+ *  - suivi de la règle 10 (DST) : voie et sens de circulation, traversées, zone de séparation, zone côtière ;
+ *  - suivi de la règle 9 (chenal étroit) : côté tribord du chenal ;
+ *  - contact de l'étrave ou de la poupe avec un quai, une digue ou la berge (manœuvres de port).
  */
-import { S, logE, type AlertCat } from '../core/state';
+import { S, logE, ownDraft, type AlertCat } from '../core/state';
 import { adiff, brgOf, fMin } from '../core/util';
-import { CHART, depthAt, isLane, laneOf, projOnPolyline, tssAt } from './chart';
+import { CHART, depthAt, fairwayAt, isLane, laneOf, projOnPolyline, tssAt } from './chart';
 import { raiseEvent } from './alerts';
 
 const KIND_TXT: Record<string, string> = {
@@ -36,11 +38,20 @@ export function navStep(dt: number): void {
   if (!CHART.grid) return;
 
   // ---- profondeur, contour de sécurité, échouement
-  const draft = o.ship.mmg.d, dHere = depthAt(o.x, o.y), sc = S.ecdis.safety;
+  const draft = ownDraft(o), dHere = depthAt(o.x, o.y), sc = S.ecdis.safety;
   if (dHere < draft) {
     S.grounded = true;
     logE(`ÉCHOUEMENT par ${Math.max(0, dHere).toFixed(1)} m de fond (tirant d'eau ${draft.toFixed(1)} m)`, 'bad');
     return;
+  }
+  // étrave et poupe : heurt d'un quai, d'une digue ou de la berge
+  for (const k of [0.48, -0.48]) {
+    const a = (o.hdg * Math.PI) / 180, px = o.x + Math.sin(a) * (k * o.L) / 1852, py = o.y + Math.cos(a) * (k * o.L) / 1852;
+    if (depthAt(px, py) < 0) {
+      S.grounded = true; S.contact = k > 0 ? 'étrave' : 'poupe';
+      logE(`HEURT : ${S.contact} contre un quai, une digue ou la berge`, 'bad');
+      return;
+    }
   }
   if (dHere < sc) cond.push({ id: 'ecdis-depth', cat: 'alarm', text: `ECDIS : fonds de ${dHere.toFixed(0)} m, inférieurs au contour de sécurité (${sc} m)` });
   else {
@@ -55,6 +66,18 @@ export function navStep(dt: number): void {
           break;
         }
       }
+    }
+  }
+
+  // ---- règle 9 : chenal étroit, se tenir du côté tribord (moitié droite dans le sens de la marche)
+  const fwy = fairwayAt(o.x, o.y), sog9 = Math.hypot(o.vx, o.vy);
+  if (fwy && sog9 > 2) {
+    const pr = projOnPolyline(fwy.axis, o.x, o.y), inbound = Math.abs(adiff(brgOf(o.vx, o.vy), pr.brg)) < 90;
+    const right = inbound ? pr.d : -pr.d; // > 0 : à droite de l'axe dans le sens de la marche
+    S.tss.fw += dt;
+    if (right < -fwy.width * 0.1) {
+      S.tss.fwWrong += dt;
+      cond.push({ id: 'fw-side', cat: 'caution', text: `${fwy.name} : vous êtes sur la moitié bâbord du chenal (R9a, se tenir près de la limite tribord)` });
     }
   }
 
@@ -101,6 +124,11 @@ export function navStep(dt: number): void {
 export function tssReport(): { pen: number; m: [ 'ok' | 'warn' | 'bad' | 'info', string][] } {
   const w = S.tss, m: ['ok' | 'warn' | 'bad' | 'info', string][] = [];
   let pen = 0;
+  // règle 9
+  if (w.fw > 60) {
+    if (w.fwWrong > 60) { pen += w.fwWrong > 0.4 * w.fw ? 15 : 8; m.push(['warn', `Moitié bâbord du chenal suivie pendant ${fMin(w.fwWrong)} sur ${fMin(w.fw)} : R9a demande de se tenir aussi près que possible de la limite extérieure du chenal sur tribord.`]); }
+    else m.push(['ok', `Chenal parcouru en se tenant sur tribord pendant ${fMin(w.fw)} : R9a.`]);
+  }
   if (!CHART.lanes.length || w.t < 1) return { pen, m };
   const cr = [...w.crossings, ...(w.cur ? [w.cur] : [])];
   if (w.inLane > 60) m.push(['ok', `Voie suivie dans la direction générale du trafic pendant ${fMin(w.inLane)} : R10(b)(i).`]);

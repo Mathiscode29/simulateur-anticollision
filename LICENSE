@@ -9,8 +9,8 @@ Les données publiques de référence citées dans le code (coefficients du navi
 Yasukawa et Yoshimura, 2015 ; positions du dispositif de séparation du trafic publiées par l'OMI) restent
 la propriété de leurs auteurs respectifs.
 
-Données tierces sous licence propre : les traits de côte du Pas-de-Calais et du détroit de Gibraltar
-(fichiers src/core/charts/pasdecalais-land.ts et src/core/charts/gibraltar-land.ts) sont extraits
+Données tierces sous licence propre : les traits de côte du Pas-de-Calais, du détroit de Gibraltar, du Havre et
+d'Ouessant (fichiers src/core/charts/pasdecalais-land.ts, gibraltar-land.ts, lehavre-land.ts et ouessant-land.ts) sont extraits
 d'OpenStreetMap. © contributeurs OpenStreetMap, données disponibles sous la licence Open Database
 License (ODbL) 1.0 : https://opendatacommons.org/licenses/odbl/
 Ces fichiers, et eux seuls, restent soumis à l'ODbL ; la réserve de droits ci-dessus ne s'y applique pas.

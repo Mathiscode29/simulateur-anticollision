@@ -51,6 +51,6 @@ describe('route prévue et écart latéral (XTE)', () => {
     expect(ok).toBeGreaterThanOrEqual(3);
   });
   it('tous les scénarios ont une description et un niveau', () => {
-    for (const s of Object.values(SCEN)) { expect(s.d.length).toBeGreaterThan(10); expect([1, 2, 3, 4, 5]).toContain(s.lvl); }
+    for (const s of Object.values(SCEN)) { expect(s.d.length).toBeGreaterThan(10); expect([1, 2, 3, 4, 5, 6, 7]).toContain(s.lvl); }
   });
 });

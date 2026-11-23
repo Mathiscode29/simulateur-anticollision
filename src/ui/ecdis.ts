@@ -10,7 +10,7 @@
  * avec une seule transformation affine) ; seules les couches dynamiques sont recalculées à chaque image.
  */
 import { lightColour } from '../sim/visual';
-import { S } from '../core/state';
+import { S, ownDraft } from '../core/state';
 import { D2R, brgOf, clamp, n360, p3, vec } from '../core/util';
 import { fmtLat, fmtLon, toLL, toXY } from '../core/geo';
 import { CHART, contours, depthAt, inPoly, polyLength, pointAt, tssAt, type XY } from '../sim/chart';
@@ -89,7 +89,7 @@ export function pan(dxPx: number, dyPx: number): void {
 
 let cacheKey = '';
 let depthImg: HTMLCanvasElement | null = null;
-let landPath: Path2D | null = null;
+let landPath: Path2D | null = null, urbanPath: Path2D | null = null;
 let isoPaths: { level: number; path: Path2D }[] = [];
 let hatch: CanvasPattern | null = null;
 
@@ -100,6 +100,9 @@ function ensureCaches(pal: EPal, palKey: PalKey): void {
   // terre
   landPath = new Path2D();
   for (const r of CHART.land) { r.forEach((p, i) => (i ? landPath!.lineTo(p.x, p.y) : landPath!.moveTo(p.x, p.y))); landPath.closePath(); }
+  // zones bâties (teinte foncée de la terre)
+  urbanPath = new Path2D();
+  for (const u of CHART.urban) { u.poly.forEach((p, i) => (i ? urbanPath!.lineTo(p.x, p.y) : urbanPath!.moveTo(p.x, p.y))); urbanPath.closePath(); }
   // isobathes
   isoPaths = [];
   const levels = Array.from(new Set([10, 20, 30, S.ecdis.safety])).sort((a, b) => a - b);
@@ -182,6 +185,7 @@ export function drawEcdis(): void {
   if (landPath) {
     ctx.fillStyle = pal.land; ctx.fill(landPath, 'evenodd');
     ctx.strokeStyle = pal.coast; ctx.lineWidth = 1.2 / k; ctx.stroke(landPath);
+    if (urbanPath && CHART.urban.length) { ctx.globalAlpha = 0.22; ctx.fillStyle = pal.coast; ctx.fill(urbanPath); ctx.globalAlpha = 1; }
   }
   screenTransform();
 
@@ -219,6 +223,17 @@ function drawGraticule(pal: EPal, fs: number): void {
 }
 
 function drawTss(pal: EPal, fs: number, k: number): void {
+  // chenaux (R9) : limites en tirets gris, axe en pointillés, nom
+  for (const f of CHART.fairways) {
+    ctx.strokeStyle = pal.text; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.1; ctx.setLineDash([8, 6]);
+    polyPath(f.poly); ctx.stroke();
+    ctx.setLineDash([2, 6]); polyPath(f.axis, false); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    if (S.ecdis.layers.names) {
+      const a = f.axis[0], b = f.axis[1], q = toScr((a.x + b.x) / 2, (a.y + b.y) / 2);
+      ctx.fillStyle = pal.text; ctx.font = `600 ${fs * 0.8}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.fillText(`${f.name} (${f.depth} m)`, q[0], q[1] - 8);
+    }
+  }
   // zones de séparation : hachures magenta
   for (const z of CHART.zones) {
     polyPath(z.poly);
@@ -326,7 +341,7 @@ function drawMarks(pal: EPal, fs: number): void {
       ctx.beginPath(); ctx.moveTo(q[0] - 8, q[1] - 2); ctx.lineTo(q[0] + 8, q[1] - 2); ctx.lineTo(q[0] + 5, q[1] + 3); ctx.lineTo(q[0] - 5, q[1] + 3); ctx.closePath(); ctx.fill(); ctx.stroke();
       line([q[0], q[1] - 2], [q[0], q[1] - 10]);
     } else {
-      const cols = m.kind in CARD ? CARD[m.kind] : m.kind === 'special' ? ['#f4d000', '#f4d000', '#f4d000'] : ['#d01c1c', '#f2f2f2', '#d01c1c'];
+      const cols = m.kind in CARD ? CARD[m.kind] : m.kind === 'special' ? ['#f4d000', '#f4d000', '#f4d000'] : m.kind === 'lr' ? ['#d01c1c', '#d01c1c', '#d01c1c'] : m.kind === 'lg' ? ['#16a34a', '#16a34a', '#16a34a'] : ['#d01c1c', '#f2f2f2', '#d01c1c'];
       for (let i = 0; i < 3; i++) { ctx.fillStyle = cols[i]; ctx.fillRect(q[0] - 3, q[1] - 10 + i * 3.4, 6, 3.4); }
       ctx.strokeStyle = pal.text; ctx.lineWidth = 0.8; ctx.strokeRect(q[0] - 3, q[1] - 10, 6, 10.2);
       ctx.beginPath(); ctx.arc(q[0], q[1], 1.8, 0, 7); ctx.fillStyle = pal.text; ctx.fill();
@@ -341,7 +356,7 @@ function drawMarks(pal: EPal, fs: number): void {
       }
     }
     ctx.globalAlpha = 1;
-    if (S.ecdis.layers.names && (m.kind !== 'port' || view.range <= 3)) {
+    if (S.ecdis.layers.names && ((m.kind !== 'port' && m.kind !== 'lr' && m.kind !== 'lg') || view.range <= 3)) {
       ctx.fillStyle = pal.text;
       ctx.fillText(`${m.approx ? '≈' : ''}${m.name}${m.light ? ' ' + m.light : ''}${m.range ? ' ' + m.range + 'M' : ''}${m.racon ? ' Racon' : ''}`, q[0] + 12, q[1] - 2);
     }
@@ -563,10 +578,10 @@ export function pickedInfo(): string[] {
   if (p.kind === 'mark') {
     const m = CHART.marks.find((x) => x.id === p.id);
     if (!m) return [];
-    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse', lh: 'phare', port: 'feu de port' };
+    const kinds: Record<string, string> = { N: 'cardinale Nord', S: 'cardinale Sud', E: 'cardinale Est', W: 'cardinale Ouest', special: 'marque spéciale', safe: 'eaux saines', lv: 'bateau-feu', light: 'bouée lumineuse', lh: 'phare', port: 'feu de port', lr: 'bouée latérale bâbord', lg: 'bouée latérale tribord' };
     return [`${m.name} — ${kinds[m.kind]}`, `${fmtLat(m.lat)} ${fmtLon(m.lon)}${m.approx ? ' (position approchée)' : ''}`, m.light ? `Feu ${m.light}${m.range ? `, portée ${m.range} M` : ''}` : m.range ? `Portée ${m.range} M (caractère non renseigné)` : '', `Relèvement / distance : ${rb(m.x, m.y)}`, `Source : ${m.src}`];
   }
-  return ['Navire porteur', `${fmtLat(toLL(o.x, o.y).lat)} ${fmtLon(toLL(o.x, o.y).lon)}`, `Tirant d'eau ${o.ship.mmg.d.toFixed(1)} m`];
+  return ['Navire porteur', `${fmtLat(toLL(o.x, o.y).lat)} ${fmtLon(toLL(o.x, o.y).lon)}`, `Tirant d'eau ${ownDraft(o).toFixed(1)} m`];
 }
 
 /** Vrai si le point écran est à terre (pour refuser un point tournant à terre). */

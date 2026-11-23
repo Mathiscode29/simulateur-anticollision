@@ -23,7 +23,7 @@ export type Kind = 'headon' | 'gw' | 'so' | 'overtake' | 'overtaken' | 'fish' | 
 export interface Scenario {
   n: string; d: string;
   /** 1 = fondamentaux, 2 = situations combinées, 3 = avancé, 4 = Pas-de-Calais (DST), 5 = détroit de Gibraltar (DST) */
-  lvl: 1 | 2 | 3 | 4 | 5;
+  lvl: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** Carte : large (défaut, cap initial aléatoire), Pas-de-Calais ou Gibraltar (départ et route géographiques imposés). */
   chart?: ChartKey;
   /** Départ [latitude, longitude] et points tournants géographiques (degrés décimaux, WGS 84). */
@@ -32,6 +32,8 @@ export interface Scenario {
   vis: Visibility | null;
   /** Réglages d'environnement imposés à la sélection (modifiables ensuite). */
   env?: Partial<Env>;
+  /** Exercice de port : tirant d'eau d'exercice (m), vitesse initiale (kn), cran initial du transmetteur, demi-largeur du couloir de route (NM). */
+  draft?: number; startKn?: number; tele?: number; xte?: number;
   /** Route : [abattée (°), longueur (NM)] par segment ; défaut : une seule route droite de 60 NM. */
   legs?: [number, number][];
   build: () => void;
@@ -40,7 +42,7 @@ export interface Scenario {
 /** Référence de placement : porteur réel maintenant, ou porteur virtuel à un point tournant à l'instant t0 (s). */
 interface Ref { x: number; y: number; hdg: number; stw: number; vx: number; vy: number; t0: number }
 
-export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé', 4: 'Pas-de-Calais (DST, règle 10)', 5: 'Détroit de Gibraltar (DST, règle 10)' };
+export const LEVELS: Record<number, string> = { 1: 'Fondamentaux', 2: 'Situations combinées', 3: 'Avancé', 4: 'Pas-de-Calais (DST, règle 10)', 5: 'Détroit de Gibraltar (DST, règle 10)', 6: 'Le Havre (port, chenal, règle 9)', 7: 'Ouessant (DST, règle 10)' };
 
 const dm = (d: number, m: number): number => d + m / 60;
 /** Longitude ouest : degrés et minutes → degrés décimaux négatifs. */
@@ -175,7 +177,7 @@ export const SCEN: Record<string, Scenario> = {
       const g = addAfterWp(4, 'so', rnd(8, 11), pm(0, 0.3), 25);
       if (g) { g.name = 'Transbordeur rapide'; g.L = 100; g.beh = Math.random() < 0.5 ? 'late' : g.beh; }
       laneFill('E', 5); laneFill('W', 2);
-      anchorAlpha(2);
+      anchorZone(2);
     } },
   gib_tanger: { n: 'Appareillage de Tanger-Med, de nuit', lvl: 5, vis: 'good', chart: 'gib',
     d: 'Sortie de Tanger-Med vers l\'Atlantique : couper le flux montant vers la Méditerranée dans la zone de prudence, puis rallier la voie ouest. Feux de navires et phares de Tarifa, Carnero et Europa Point.',
@@ -189,7 +191,7 @@ export const SCEN: Record<string, Scenario> = {
       laneAt('W', j, -2.5, rnd(0.3, 0.5), 9);
       laneAt('W', j, -7, pm(0.2, 0.5), 18);
       laneFill('E', 4);
-      anchorAlpha(3);
+      anchorZone(3);
     } },
   gib_alge: { n: 'Arrivée à Algeciras par brume de Levant', lvl: 5, vis: 'poor', chart: 'gib',
     d: 'Venant de l\'Atlantique par la voie est, en brume : rattraper un navire lent, puis couper la voie ouest dans la zone de prudence est pour gagner la baie d\'Algeciras, avec un transbordeur Algeciras / Ceuta.',
@@ -205,6 +207,70 @@ export const SCEN: Record<string, Scenario> = {
       laneFill('W', 4);
       // baie d'Algeciras : navires au mouillage de part et d'autre de la route finale (positions indicatives)
       anchorGeo(dm(36, 3.6), dmW(5, 21.4)); anchorGeo(dm(36, 4.4), dmW(5, 24.6)); anchorGeo(dm(36, 2.6), dmW(5, 25.0));
+    } },
+
+  // ----- Le Havre (carte schématique, chenal et bassins ; navire allégé à 13,5 m)
+  lh_entree: { n: 'Entrée au Havre par le chenal', lvl: 6, vis: 'good', chart: 'lh', draft: 13.5, startKn: 10, tele: 5, xte: 0.08,
+    d: 'Du milieu du chenal aux musoirs puis à l\'avant-port : tenir la droite du chenal (R9), croiser un porte-conteneurs sortant, se laisser dépasser par un transbordeur, réduire l\'erre et évoluer dans l\'avant-port. Navire allégé (tirant d\'eau d\'exercice 13,5 m).',
+    start: [49.5027, -0.0264], wpts: [[49.4858, 0.0870], [49.4832, 0.1000]],
+    env: { windFrom: 230, windKn: 15, curSet: 100, curKn: 1, night: false },
+    build() {
+      const c = laneShip('LHout', 0.2, 0, 10); if (c) { c.name = 'Porte-conteneurs'; c.L = 300; }
+      const o = S.own, q = vec(o.hdg, -1.5), f = mkT('power', o.hdg, 17, o.x + q.x, o.y + q.y);
+      f.name = 'Transbordeur'; f.L = 185; f.lane = 'LHin'; f.laneDir = 1; f.laneOff = 0;
+      add('fish', rnd(9, 12), pm(0.2, 0.5));
+      anchorZone(3);
+    } },
+  lh_sortie: { n: 'Appareillage de l\'avant-port, de nuit', lvl: 6, vis: 'good', chart: 'lh', draft: 13.5, startKn: 0, tele: 2, xte: 0.08,
+    d: 'Navire stoppé dans l\'avant-port, vent de travers : prendre de l\'erre, passer les musoirs, suivre le chenal en tenant la droite et croiser le trafic entrant (porte-conteneurs, transbordeur).',
+    start: [49.4829, 0.1030], wpts: [[49.4859, 0.0905], [49.5233, -0.165], [49.5330, -0.2150]],
+    env: { windFrom: 250, windKn: 20, curSet: 280, curKn: 0.8, night: true },
+    build() {
+      const a = laneShip('LHin', 4.5, 0, 12); if (a) { a.name = 'Porte-conteneurs'; a.L = 330; }
+      const f = laneShip('LHin', 8.5, 0, 18); if (f) { f.name = 'Transbordeur'; f.L = 185; }
+      const o = laneShip('LHout', 6, 0, 10); if (o) o.name = 'Vraquier';
+      anchorZone(3);
+    } },
+  lh_p2000: { n: 'Appareillage de Port 2000', lvl: 6, vis: 'good', chart: 'lh', draft: 14.5, startKn: 0, tele: 2, xte: 0.1,
+    d: 'Porte-conteneurs à quai au fond de Port 2000 (évolution du navire stoppé), sortie par l\'accès de Port 2000, croisement d\'un porte-conteneurs entrant, puis le chenal d\'accès jusqu\'à LHA.',
+    start: [49.4628, 0.1480], wpts: [[49.4636, 0.1060], [49.4985, 0.0200], [49.5233, -0.165]],
+    env: { windFrom: 270, windKn: 22, curSet: 95, curKn: 1.2, night: false },
+    build() {
+      const a = laneShip('P2in', 2.2, 0, 11); if (a) { a.name = 'Porte-conteneurs'; a.L = 366; }
+      const b = laneShip('LHin', 3, 0, 12); if (b) b.name = 'Pétrolier';
+      add('fish', rnd(18, 22), pm(0.3, 0.6));
+    } },
+
+  // ----- Ouessant (DST « Off Ushant »)
+  ush_ne: { n: 'Remontée dans la voie montante d\'Ouessant', lvl: 7, vis: 'good', chart: 'ush',
+    d: 'Entrée par le sud dans la voie montante (028° puis 060° au coude) : un navire lent à rattraper, des chalutiers dans la voie, la voie descendante chargée au large.',
+    start: [48.560, -5.793], wpts: [[48.6042, -5.7575], [48.78, -5.6158], [48.8446, -5.4475], [48.895, -5.30]],
+    env: { windFrom: 240, windKn: 20, curSet: 30, curKn: 1.5, night: false },
+    build() {
+      laneAhead('NE', 4.5, pm(0, 0.15), 9);
+      add('fish', rnd(30, 36), pm(0, 0.4));
+      laneAhead('NE', -3, rnd(0.4, 0.6), 19);
+      laneFill('SW', 5); laneFill('NE', 2);
+    } },
+  ush_sw: { n: 'Descente de nuit dans la voie descendante', lvl: 7, vis: 'good', chart: 'ush',
+    d: 'Voie descendante de nuit (240° puis 208°), feux de Créac\'h et du Stiff sur bâbord : trafic dense, un navire à contresens, un chalutier en pêche dans la voie.',
+    start: [49.009, -5.5055], wpts: [[48.9842, -5.5713], [48.8971, -5.7967], [48.6808, -5.9733], [48.60, -6.03]],
+    env: { windFrom: 300, windKn: 16, curSet: 200, curKn: 1.2, night: true },
+    build() {
+      laneAhead('SW', 5, pm(0, 0.15), 10);
+      laneShip('SW', 14, pm(0.3, 0.6), 13, { dir: -1, beh: 'wrong' });
+      add('fish', rnd(26, 32), pm(0, 0.4));
+      laneFill('SW', 4); laneFill('NE', 5);
+    } },
+  ush_brume: { n: 'Rejoindre la voie montante par brume', lvl: 7, vis: 'poor', chart: 'ush',
+    d: 'Venant du large au sud-ouest, rejoindre la voie montante à son extrémité sous un faible angle (R10b(iii)), radar seul, puis la suivre : trafic de la voie et navires qui la quittent.',
+    start: [48.500, -5.960], wpts: [[48.6042, -5.7575], [48.78, -5.6158], [48.8446, -5.4475]],
+    env: { windFrom: 200, windKn: 10, curSet: 40, curKn: 1, rain: false },
+    build() {
+      laneAhead('NE', 6, pm(0, 0.2), 11);
+      laneMeetRoute('NE', rnd(0.4, 0.7), rnd(12, 15));
+      laneFill('NE', 3); laneFill('SW', 4);
+      add('gw', rnd(22, 28), pm(0, 0.3));
     } },
 };
 
@@ -311,8 +377,8 @@ export function anchorGeo(lat: number, lon: number): Target | null {
   const p = toXY(lat, lon);
   return anchorAt(p.x, p.y);
 }
-/** Navires au mouillage dans la zone « Mouillage Alpha » de la carte (cercle de COLREG.2/Circ.66). */
-function anchorAlpha(n: number): void {
+/** Navires au mouillage dans la première zone de mouillage de la carte (Mouillage Alpha à Gibraltar, zone d'attente du Havre). */
+function anchorZone(n: number): void {
   const a = CHART.anch[0];
   if (!a) return;
   for (let i = 0; i < n; i++) { const v = vec((360 / n) * i + rnd(0, 40), a.r * rnd(0.3, 0.8)); anchorAt(a.x + v.x, a.y + v.y); }
@@ -412,34 +478,38 @@ export function add(kind: Kind, Tmin: number, off: number, ref: Ref = ownRef(), 
 export function newScenario(): void {
   const sh = SHIPS[S.shipKey] ?? SHIPS[DEFAULT_SHIP], sc = SCEN[S.scen];
   const chart = loadChart(sc.chart ?? 'open');
-  const lim = S.route?.xteLim ?? 1, show = S.route?.show ?? true;
+  const lim = sc.xte ?? (S.route && S.route.xteLim < 0.5 ? 1 : S.route?.xteLim ?? 1), show = S.route?.show ?? true;
   let H: number, x0 = 0, y0 = 0, route: Route;
   if (sc.start && sc.wpts) {
     // départ et route géographiques
     const p0 = toXY(sc.start[0], sc.start[1]), w = sc.wpts.map(([la, lo]) => toXY(la, lo));
-    const h = brgOf(w[0].x - p0.x, w[0].y - p0.y), back = vec(h, 2);
+    const h = brgOf(w[0].x - p0.x, w[0].y - p0.y), back = vec(h, sc.xte ? 0.15 : 2);
     H = Math.round(h); x0 = p0.x; y0 = p0.y;
     route = { wps: [{ x: x0 - back.x, y: y0 - back.y }, ...w], leg: 0, xteLim: lim, show, maxXte: 0, tOver: 0 };
   } else {
     H = Math.round(rnd(0, 359));
     route = { ...makeRoute(0, 0, H, sc.legs ?? [[0, 60]], lim), show };
   }
-  S.own = { x: x0, y: y0, hdg: H, cmdHdg: H, stw: sh.max, rot: 0, rud: 0, tele: TELE_SEA, ap: true, manRud: 0, rudLim: 20, ship: sh, type: 'power', L: sh.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0 };
-  initOwnDynamics(S.own, sh.max);
-  const w = vec(H, sh.max), c = vec(S.env.curSet, S.env.curKn);
+  const v0 = sc.startKn ?? sh.max, tele0 = sc.tele ?? TELE_SEA;
+  S.own = { x: x0, y: y0, hdg: H, cmdHdg: H, stw: v0, rot: 0, rud: 0, tele: tele0, ap: true, manRud: 0, rudLim: 20, ship: sh, type: 'power', L: sh.L, vx: 0, vy: 0, u: 0, v: 0, r: 0, n: 0, revUntil: 0, draft: sc.draft };
+  initOwnDynamics(S.own, v0);
+  const w = vec(H, v0), c = vec(S.env.curSet, S.env.curKn);
   S.own.vx = w.x + c.x; S.own.vy = w.y + c.y;
   Object.assign(S, {
     t: 0, targets: [], tracks: [], clutter: [], hist: [], enc: {}, log: [], sweep: 0, sel: null, trackSeq: 1,
     aiAcc: 0, encAcc: 0, histAcc: 0, spdPoor: [0, 0], over: false, collided: null, report: null, started: false, paused: true,
     alerts: [], rainCells: [], silencedUntil: 0, route,
-    chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], snd: newSoundState(),
+    chart: chart.key, coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, contact: null, navAlerts: [], snd: newSoundState(),
   });
   Object.assign(S.ecdis, { ebl: null, vrm: null, routeIssues: [] });
   S.rec = newRecording();
   Object.assign(S.radar, {
-    cuRef: H, trialHdg: H, trialSpd: Math.round(sh.max), trial: false, trialT0: 0, tmC: { x: x0, y: y0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
+    cuRef: H, trialHdg: H, trialSpd: Math.round(v0), trial: false, trialT0: 0, tmC: { x: x0, y: y0 }, off: { x: 0, y: 0 }, offMode: 'OFF',
     ebl: [null, null], vrm: [null, null], pi: [null, null, null, null],
   });
+  if (sc.xte) S.radar.range = 1.5; // exercice de port : échelle courte
+  // contour de sécurité : 15 m pour un navire allégé (chenal dragué à 17,5 m), 30 m sinon
+  S.ecdis.safety = sc.draft ? 15 : S.ecdis.safety === 15 ? 30 : S.ecdis.safety;
   sc.build();
-  logE(`Exercice : ${sc.n} — ${sh.n}, route ${p3(H)}°, ${TELE[TELE_SEA].n}`);
+  logE(`Exercice : ${sc.n} — ${sh.n}, route ${p3(H)}°, ${TELE[tele0].n}${sc.draft ? `, tirant d'eau d'exercice ${sc.draft.toFixed(1)} m` : ''}`);
 }

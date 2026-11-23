@@ -15,16 +15,17 @@ Simulateur radar/ARPA et ECDIS web pour s'entraîner à l'anticollision (RIPAM /
 ```
 src/core/   util.ts (maths, conventions), data.ts (navires, transmetteur, types de cibles), state.ts (types + état global S),
             geo.ts (WGS 84 ↔ plan local, format marin), ships/ (jeux de paramètres MMG sourcés, un fichier par navire),
-            charts/ (données de carte sourcées : types.ts, pasdecalais.ts, gibraltar.ts ; pasdecalais-land.ts et gibraltar-land.ts sous ODbL)
+            charts/ (données de carte sourcées : types.ts, pasdecalais.ts, gibraltar.ts, lehavre.ts, ouessant.ts ; fichiers *-land.ts sous ODbL)
 src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arrêt, critères OMI MSC.137(76)),
             physics.ts (porteur MMG, machine, vent/courant, cinématique des cibles), radar.ts (balayage, gain/mer/pluie, bandes X/S,
             grains, échos de côte et de bouées, masquage, poursuite TT, zone d'acquisition, trial), alerts.ts (alertes et acquittement, sans DOM),
             chart.ts (carte compilée en plan local, bathymétrie schématique, isobathes, zones du DST, suivi de voie, lancer de rayons,
-            vérification de route), ais.ts (AIS classes A/B, cadences, association radar/AIS), nav.ts (alarmes ECDIS, échouement, règle 10),
+            vérification de route, chenaux et bassins dragués, voies de chenal, blocs de ville), ais.ts (AIS classes A/B, cadences, association radar/AIS),
+            nav.ts (alarmes ECDIS, échouement, heurt de quai par l'étrave ou la poupe, règle 9, règle 10),
             route.ts (route prévue, points tournants, écart latéral XTE),
             rules.ts (roleOf + IA des cibles : évitement du porteur et des autres cibles, R17a(ii), dernière minute),
             faults.ts (avaries machine/barre, abordage entre cibles, réparation, messages VHF/AIS nominatifs), assessment.ts (suivi des situations, évaluation, rapport),
-            scenarios.ts (26 exercices sur 5 niveaux, navires au mouillage, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
+            scenarios.ts (32 exercices sur 7 niveaux, exercices de port, navires au mouillage, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
             signaux de brume, feux et marques en 3D pour la vue extérieure), debrief.ts (enregistrement de l'exercice, analyse et moments clés
             du débrief), sound.ts (signaux sonores R34 / R35, annexe III : émission, portée d'audibilité, suivi R35), loop.ts (pas de simulation)
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
@@ -40,9 +41,10 @@ tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sa
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
             trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D, marques de jour, familles de silhouettes),
-            debrief.test.ts (enregistrement, interpolation, moments clés), mouillage-sons.test.ts (R30, R34, R35), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
+            debrief.test.ts (enregistrement, interpolation, moments clés), mouillage-sons.test.ts (R30, R34, R35),
+            havre-ouessant.test.ts (chenal, bassins, entrée au port, R9, ville ; DST d'Ouessant), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
-            carte-pas-de-calais.md, carte-gibraltar.md (sources et limites des cartes)
+            carte-pas-de-calais.md, carte-gibraltar.md, carte-le-havre.md, carte-ouessant.md (sources et limites des cartes)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
 ```
 
@@ -56,7 +58,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - Unités : milles nautiques, nœuds, degrés, secondes. Repère local x = est, y = nord ; caps et relèvements de 0 à 360 dans le sens horaire depuis le nord.
 - Pas de simulation fixe de 0,25 s (`DT`), indépendant de l'affichage et de l'accélération du temps. Le radar date chaque écho du passage du faisceau sur son relèvement ; l'écran radar est affiché avec un pas de retard (`tv = S.t − DT + fraction`) pour un balayage continu.
 - L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
-- Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'` ou `'gib'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneMeetRoute` (au croisement de la route prévue), `laneAhead`, `laneAt`, `laneFill` (identifiants de voie : NE/SW au Pas-de-Calais, W/E à Gibraltar). Nouvelle carte : un `ChartSource` dans `src/core/charts/` (types communs dans `types.ts`), enregistré dans `SOURCES` de `sim/chart.ts`.
+- Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'`, `'gib'`, `'lh'` ou `'ush'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneMeetRoute` (au croisement de la route prévue), `laneAhead`, `laneAt`, `laneFill` (identifiants de voie : NE/SW au Pas-de-Calais et à Ouessant, W/E à Gibraltar ; voies de chenal `LHin`/`LHout`, `P2in`/`P2out` au Havre). Exercice de port : `draft` (tirant d'eau d'exercice, navire allégé, le modèle MMG restant celui en charge), `startKn`, `tele`, `xte` ; un chenal (`fairways`, R9) est un axe orienté vers le port avec largeur et profondeur draguée, prolongé dans le port par `inner` pour le trafic. Nouvelle carte : un `ChartSource` dans `src/core/charts/` (types communs dans `types.ts`), enregistré dans `SOURCES` de `sim/chart.ts`.
 - Positions : le moteur travaille en plan local (NM) ; toute donnée géographique est saisie en WGS 84 et convertie par `core/geo.ts`. Affichage au format marin (51°02,345'N 001°23,456'E).
 - Les vues (radar, ECDIS, vue extérieure) ne font que lire `S` : changer de vue n'interrompt jamais la simulation. La vue extérieure est rendue par défaut en canvas 2D « en blocs » (`outside.ts`) : priorité à la fluidité sur un ordinateur courant, sans viser le photoréalisme. Pas de bibliothèque 3D (le rendu WebGL essayé en V1.1 a été retiré en V1.3, trop lourd) ; aucune dépendance d'exécution.
 - Toute modification de `rules.ts` ou `assessment.ts` s'accompagne d'un test dans `tests/`.
@@ -73,6 +75,8 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - Critères OMI de manœuvrabilité : résolution MSC.137(76).
 - DST du Pas-de-Calais : OMI COLREG.2/Circ.59, annexe 8 (positions WGS 84) ; MGN 364 Amendment 2 (navigation dans le détroit, bouées MPC et CS4).
 - DST du détroit de Gibraltar : OMI COLREG.2/Circ.66, annexe 1 (positions WGS 84, en vigueur le 1er juin 2015).
+- DST « Off Ushant » : OMI SN/Circ.232, annexe A (positions WGS 84, 1er mai 2003) ; arrêté Premar Atlantique 2003/11 ; COLREG.2/Circ.64 et 75 (route à double sens).
+- Feux : NGA List of Lights Pub. 113 et 114 (domaine public).
 - ECDIS : résolution MSC.232(82) (repères : contour de sécurité, alarmes, route) ; présentation inspirée de S-52 sans revendiquer la conformité.
 - AIS : UIT-R M.1371 (cadences des messages de position), association radar / AIS selon MSC.192(79) 5.33.
 - Grille de référence des simulateurs : DNV-ST-0033 (révision 2025).

@@ -27,7 +27,12 @@ export interface OwnShip {
   u: number; v: number; r: number; n: number; revUntil: number;
   /** Angle de barre ordonné (°, + = tribord) : pilote automatique ou barre manuelle ; o.rud suit à 2,5 °/s. */
   rudCmd?: number;
+  /** Tirant d'eau d'exercice (m) : navire allégé pour un exercice portuaire ; défaut : celui du modèle MMG. */
+  draft?: number;
 }
+
+/** Tirant d'eau effectif du porteur (m). */
+export const ownDraft = (o: OwnShip = S.own): number => o.draft ?? o.ship.mmg.d;
 
 /** Écho radar tel que peint au dernier passage du faisceau : position géographique (NM), relèvement et distance depuis le porteur. */
 export interface Echo { x: number; y: number; b: number; r: number; t: number }
@@ -98,6 +103,8 @@ export interface Encounter {
 export interface TssWatch {
   kind: string; t: number;
   inLane: number; wrong: number; oblique: number; sep: number; itz: number; prec: number;
+  /** Règle 9 : temps passé dans un chenal, dont du mauvais côté (moitié bâbord dans le sens de la marche). */
+  fw: number; fwWrong: number;
   crossings: { lane: string; maxDev: number; t: number }[];
   cur: { lane: string; maxDev: number; t: number } | null;
 }
@@ -196,6 +203,8 @@ export interface State {
   tss: TssWatch;
   ecdis: EcdisSettings;
   grounded: boolean;
+  /** Partie du navire qui a heurté un ouvrage ou la berge (manœuvres de port), sinon null. */
+  contact?: 'étrave' | 'poupe' | null;
   /** Alertes de condition de navigation (ECDIS, DST) recalculées chaque seconde. */
   navAlerts: { id: string; cat: AlertCat; text: string }[];
   rec: Recording | null;
@@ -227,7 +236,7 @@ export function newSoundState(): SoundState {
 }
 
 export function newTssWatch(): TssWatch {
-  return { kind: 'none', t: 0, inLane: 0, wrong: 0, oblique: 0, sep: 0, itz: 0, prec: 0, crossings: [], cur: null };
+  return { kind: 'none', t: 0, inLane: 0, wrong: 0, oblique: 0, sep: 0, itz: 0, prec: 0, fw: 0, fwWrong: 0, crossings: [], cur: null };
 }
 
 function defaultOwn(): OwnShip {

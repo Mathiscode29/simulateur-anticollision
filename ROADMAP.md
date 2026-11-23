@@ -40,7 +40,9 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Détroit de Gibraltar : trait de côte OpenStreetMap, DST d'après COLREG.2/Circ.66 (voies en deux tronçons, zones de prudence, ZNC, mouillage), phares, relief schématique, trois exercices (transit ouest, appareillage de Tanger-Med de nuit, arrivée à Algeciras en brume)
 - [ ] Bathymétrie réelle libre (EMODnet) à la place du modèle schématique ; marée (hauteur et courants)
 - [ ] Pêcheurs dans la zone de séparation, routes des ferries Douvres–Calais
-- [ ] Zone d'Ouessant (DST d'Ouessant)
+- [x] V1.8 : Le Havre (chenal d'accès, avant-port, Port 2000, ville en blocs, pont de Normandie ; entrée et appareillages, règle 9, heurt de quai) et Ouessant (DST « Off Ushant » d'après SN/Circ.232, phares, trois exercices)
+- [ ] Le Havre : géométrie exacte du port (bassins, quais) à partir de données libres détaillées ; remorqueurs ; Antifer
+- [ ] Saint-Malo et ses abords à partir des données S-100 du SHOM en libre accès
 - [x] Interaction entre cibles : elles s'évitent entre elles selon le RIPAM, mal en trafic imprévisible (quasi-abordages, abordages)
 - [x] Avaries (machine, barre, abordage) et changements de statut annoncés par VHF / AIS, rôle du porteur réévalué (R18)
 

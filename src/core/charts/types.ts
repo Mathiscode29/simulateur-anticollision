@@ -7,7 +7,8 @@ export const dm = (d: number, m: number): number => (d < 0 || Object.is(d, -0) ?
 export const P = (latD: number, latM: number, lonD: number, lonM: number): LL => [dm(latD, latM), dm(lonD, lonM)];
 
 /** lh : phare à terre (pas d'écho radar propre, feu de grande portée) ; port : feu de port (musoir de jetée ou de digue). */
-export type MarkKind = 'N' | 'S' | 'E' | 'W' | 'special' | 'safe' | 'lv' | 'light' | 'lh' | 'port';
+export type MarkKind = 'N' | 'S' | 'E' | 'W' | 'special' | 'safe' | 'lv' | 'light' | 'lh' | 'port' | 'lr' | 'lg';
+/** lr / lg : bouées latérales de chenal, bâbord (rouge, cylindrique) et tribord (verte, conique), région A de l'AISM. */
 export interface ChartMark { id: string; name: string; lat: number; lon: number; kind: MarkKind; light?: string; range?: number; elev?: number; approx?: boolean; racon?: boolean; src: string }
 export interface ChartBank { name: string; lat: number; lon: number; len: number; wid: number; orient: number; min: number; src: string }
 export interface TssZone { id: string; name: string; pts: LL[] }
@@ -31,7 +32,26 @@ export interface ChartSource {
   /** Relief : altitude de base des terres (m) et sommets notables. */
   landBase?: number; relief?: Relief[];
   attribution: string;
+  /** Pas de la grille de profondeur (NM), 0,2 par défaut ; plus fin pour une carte de port. */
+  gridStep?: number;
+  /** Chenaux balisés : axe dans le sens de l'entrée, largeur et profondeur draguée (règle 9). */
+  fairways?: Fairway[];
+  /** Zones draguées (bassins, souilles) : profondeur imposée. */
+  dredged?: Dredged[];
+  /** Ville et ouvrages pour la vue extérieure : quartiers en blocs générés et repères ponctuels. */
+  urban?: UrbanZone[];
+  landmarks?: Landmark[];
 }
+
+/** Chenal étroit (R9) : axe orienté vers l'intérieur du port, largeur (NM), profondeur draguée (m). */
+export interface Fairway { id: string; name: string; axis: LL[]; width: number; depth: number; src: string; inner?: LL[] }
+/* inner : prolongement de l'axe à l'intérieur du port, suivi par le trafic (hors chenal au sens de R9). */
+export interface Dredged { name: string; pts: LL[]; depth: number; src: string }
+/** Quartier : blocs générés sur une trame de `step` m, hauteurs tirées dans h (m). */
+export interface UrbanZone { name: string; pts: LL[]; h: [number, number]; step: number; col?: string }
+export type UrbanKind = 'bld' | 'tower' | 'crane' | 'tank' | 'pylon' | 'deck';
+/** Repère : emprise w × d (m), hauteur h (m) au-dessus de z0, orientation rot (° vrais du grand côté). */
+export interface Landmark { name: string; lat: number; lon: number; kind: UrbanKind; w: number; d: number; h: number; z0?: number; rot?: number; col?: string; approx?: boolean; src: string }
 
 /** Zone de mouillage circulaire (centre, rayon en NM). */
 export interface ChartAnchorage { name: string; lat: number; lon: number; r: number; src: string }

@@ -7,6 +7,16 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.8 — 24 novembre 2026
+Deux nouvelles zones : Le Havre (port) et Ouessant.
+- **Le Havre** : chenal d'accès depuis la bouée LHA jusqu'aux musoirs des digues Nord et Sud, avant-port, bassin Théophile-Ducrocq, accès et bassin de Port 2000 (4,2 km de quai), Antifer au nord. Feux de la NGA (Pub. 114), cap de la Hève, alignement du quai d'escale, bouées latérales schématiques du chenal, zone d'attente indicative.
+- Ville en blocs pour la vue extérieure : église Saint-Joseph (107 m, éclairée la nuit), hôtel de ville, Porte Océane, sémaphore, centre reconstruit, Sainte-Adresse, zone portuaire et réservoirs, portiques à conteneurs de Port 2000, pont de Normandie ; falaises de la Hève et d'Antifer, côte de Grâce. Fenêtres éclairées et feux d'obstacle la nuit.
+- Manœuvres de port : départ stoppé à quai, tirant d'eau d'exercice (navire allégé à 13,5 ou 14,5 m, le modèle de manœuvrabilité restant celui du KVLCC2 en charge), grille de profondeur fine (≈ 75 m), profondeur exacte jusqu'au quai dans les bassins, heurt détecté à l'étrave et à la poupe, échelle radar 1,5 NM et contour de sécurité de 15 m au départ.
+- Règle 9 : suivi du côté tribord dans le chenal (alerte et bilan) ; trafic de chenal entrant (qui s'arrête au port) et sortant.
+- Trois exercices au Havre : entrée par le chenal, appareillage de l'avant-port de nuit, appareillage de Port 2000.
+- **Ouessant** : DST « Off Ushant » d'après l'OMI (SN/Circ.232 : voies montante et descendante avec coude, zones de séparation, zone de navigation côtière), phares de Créac'h, du Stiff, de la Jument, de Nividic, de Men-Korn, de Kéréon, du Four, de Trézien, de Kermorvan, de Saint-Mathieu et des Pierres Noires (NGA Pub. 113). Trois exercices : remontée dans la voie montante, descente de nuit, rejoindre la voie montante par brume.
+- ECDIS : chenaux (limites et axe), zones bâties, bouées latérales ; contour de sécurité de 15 m ajouté. Relief côtier de la vue extérieure : le relief en retrait est voilé selon sa propre distance.
+
 ## V1.7 — 23 novembre 2026
 - Vue extérieure : montants des vitres de la passerelle 1,5 fois plus espacés (tous les 36° au lieu de 24°).
 - Fenêtres des châteaux des autres navires : retour à l'espacement d'origine (2,8 m), la V1.6 ayant mal interprété la demande.

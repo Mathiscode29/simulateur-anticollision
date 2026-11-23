@@ -1,5 +1,5 @@
 /** Interface : commandes passerelle, réglages radar et ECDIS, vues, alertes, table des cibles, bilan, clavier et souris. */
-import { S, logE, type Compliance, type Faults, type RadarSettings, type Visibility } from '../core/state';
+import { S, logE, ownDraft, type Compliance, type Faults, type RadarSettings, type Visibility } from '../core/state';
 import { RANGES, TELE } from '../core/data';
 import { adiff, brgOf, clamp, fMin, fT, n360, p3, vec } from '../core/util';
 import { LEVELS, SCEN, applyScenarioEnv, newScenario } from '../sim/scenarios';
@@ -343,11 +343,11 @@ export function upd(): void {
   const ll = toLL(o.x, o.y), dep = depthAt(o.x, o.y), zone = tssAt(o.x, o.y);
   $('nPos').textContent = `${fmtLat(ll.lat)} ${fmtLon(ll.lon)}`;
   const db = $('nDep');
-  db.textContent = dep > 200 ? '> 200 m' : `${dep.toFixed(0)} m · ${(dep - o.ship.mmg.d).toFixed(0)} m s/q`;
+  db.textContent = dep > 200 ? '> 200 m' : `${dep.toFixed(0)} m · ${(dep - ownDraft(o)).toFixed(0)} m s/q`;
   db.classList.toggle('over', dep < S.ecdis.safety);
   $('nZone').textContent = zone.name;
   $('ecRng').textContent = ecView.range + ' NM';
-  $('ecDraft').textContent = `tirant d'eau ${o.ship.mmg.d.toFixed(1)} m`;
+  $('ecDraft').textContent = `tirant d'eau ${ownDraft(o).toFixed(1)} m${o.draft ? ' (exercice)' : ''}`;
   document.querySelectorAll<HTMLButtonElement>('#ecLayers button').forEach((b) => b.classList.toggle('on', (S.ecdis.layers as Record<string, boolean>)[b.dataset.v!]));
   const info = pickedInfo().filter(Boolean);
   const pickHtml = info.length ? info.map((s, i) => (i ? `<div>${esc(s)}</div>` : `<b>${esc(s)}</b>`)).join('') : '<span class="dim">Outil Info : cliquez sur une cible AIS, une piste radar, une bouée ou le navire.</span>';
@@ -448,7 +448,7 @@ function initEcdisInput(ec: HTMLCanvasElement): void {
 
 export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): void {
   initEcdisInput(ec);
-  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4, 5].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
+  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4, 5, 6, 7].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
     + Object.entries(SCEN).filter(([, s]) => s.lvl === l).map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('')).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
   setPalette(R().palette);

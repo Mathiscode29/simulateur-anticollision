@@ -17,7 +17,7 @@ import { S, type Behaviour, type OwnShip, type Role, type Target, type TargetTyp
 import { SPECIAL } from '../core/data';
 import { K2N, adiff, brgOf, cpaOf, fMin, n360, pm, rnd, vec } from '../core/util';
 import { gv } from './physics';
-import { depthAt, laneOf, laneSteer } from './chart';
+import { depthAt, laneOf, laneSteer, polyLength, projOnPolyline } from './chart';
 import { jammedHeading } from './faults';
 
 export interface Vessel { x: number; y: number; hdg: number; stw: number; type: TargetType | 'power' }
@@ -157,6 +157,13 @@ export function aiStep(t: Target): void {
       if (t.laneOff && depthAt(t.x + h.x, t.y + h.y) < 25) t.laneOff *= 0.7;
       t.baseHdg = laneSteer(l, t.x, t.y, t.laneOff ?? 0, t.laneDir ?? 1);
       if (a.state === 'transit') t.cmdHdg = t.baseHdg;
+      // voie d'entrée de port : réduction progressive puis arrêt au bout de l'axe (le navire est rendu à quai)
+      if (l.arrive) {
+        const rest = polyLength(l.axis) - projOnPolyline(l.axis, t.x, t.y).s;
+        // vitesse compatible avec la constante de décélération du navire (≈ distance d'arrêt), arrêt à 0,4 NM de la fin
+        const vMax = rest < 0.4 ? 0 : ((rest - 0.4) * 3600) / (1.5 * t.dec);
+        if (vMax < t.baseStw) { t.baseStw = vMax; if (a.state === 'transit') t.cmdStw = vMax; }
+      }
     }
   }
   if (t.type === 'nuc') {

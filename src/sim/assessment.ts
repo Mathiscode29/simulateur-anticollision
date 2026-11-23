@@ -3,7 +3,7 @@
  * Les évaluations utilisent la vérité terrain (pas les données ARPA bruitées).
  * Chaque message doit citer la règle RIPAM concernée.
  */
-import { S, logE, type Encounter, type Msg, type Report, type Target } from '../core/state';
+import { S, logE, ownDraft, type Encounter, type Msg, type Report, type Target } from '../core/state';
 import { ROLE_TXT } from '../core/data';
 import { K2N, adiff, brgOf, cpaOf, fMin, fT, n360, vec } from '../core/util';
 import { SCEN } from './scenarios';
@@ -193,10 +193,11 @@ export function finish(): void {
   const tr10 = tssReport();
   pen += tr10.pen; global.push(...tr10.m);
   const grounded = S.grounded;
-  if (grounded) global.unshift(['bad', `Échouement (fonds ≈ ${Math.max(0, depthAt(S.own.x, S.own.y)).toFixed(1)} m pour ${S.own.ship.mmg.d.toFixed(1)} m de tirant d'eau) : R6(a)(vi) impose de tenir compte du tirant d'eau par rapport aux fonds disponibles ; surveiller le contour de sécurité ECDIS.`]);
+  if (grounded && S.contact) global.unshift(['bad', `Heurt de l'${S.contact} contre un quai, une digue ou la berge : R2 (bonne pratique maritime) et R6(a)(ii) (capacité de manœuvre, distance d'arrêt et qualités de giration) ; réduire l'erre et anticiper l'évitage.`]);
+  else if (grounded) global.unshift(['bad', `Échouement (fonds ≈ ${Math.max(0, depthAt(S.own.x, S.own.y)).toFixed(1)} m pour ${ownDraft().toFixed(1)} m de tirant d'eau) : R6(a)(vi) impose de tenir compte du tirant d'eau par rapport aux fonds disponibles ; surveiller le contour de sécurité ECDIS.`]);
   const collided = S.collided !== null;
   if (unfinished && !collided && !grounded) global.push(['info', `Exercice interrompu : ${unfinished} situation(s) encore en cours, la note ne porte que sur ce qui a été joué.`]);
   const score = collided || grounded ? 0 : Math.max(0, 100 - pen);
-  const grade = collided ? 'Abordage' : grounded ? 'Échouement' : unfinished ? 'Exercice interrompu' : score >= 85 ? 'Très bien' : score >= 70 ? 'Correct' : score >= 50 ? 'Insuffisant' : 'Dangereux';
+  const grade = collided ? 'Abordage' : grounded ? (S.contact ? 'Heurt' : 'Échouement') : unfinished ? 'Exercice interrompu' : score >= 85 ? 'Très bien' : score >= 70 ? 'Correct' : score >= 50 ? 'Insuffisant' : 'Dangereux';
   S.report = { score, grade, scen: SCEN[S.scen].n, duration: S.t, global, items, collided, grounded };
 }
