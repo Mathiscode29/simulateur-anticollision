@@ -15,12 +15,15 @@
   <button id="play" data-act="play" title="Lecture / pause (Espace)">▶</button>
   <div class="seg" data-seg="ts" title="Accélération du temps"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
   <span class="sp"></span>
-  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button></div>
+  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button><button data-v="visual">Visuel</button><button data-v="bridge" title="Triangle du chef de quart : visuel en haut, radar en bas à gauche, ECDIS en bas à droite">Passerelle</button></div>
   <div class="seg" data-seg="palette" title="Palette d'affichage"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div>
   <span class="stcw" title="Outil d'entraînement complémentaire, non agréé au titre de la convention STCW">Non agréé STCW</span>
 </header>
 <main>
 <div id="left">
+  <div id="visualWrap"><canvas id="outside"></canvas>
+    <div class="vbar"><button data-act="look" data-v="-10" title="Regard à gauche (Q)">◀</button><button data-act="lookFwd" title="Regard sur l'avant (Z)">Avant</button><button data-act="look" data-v="10" title="Regard à droite (D)">▶</button><button data-act="lookAft" title="Regard sur l'arrière depuis l'aileron (X)">Arrière</button><button data-act="binoc" title="Jumelles 7× (B ou molette)">Jumelles</button></div>
+  </div>
   <div id="radarWrap"><canvas id="radar"></canvas></div>
   <div id="ecdisWrap"><canvas id="ecdis"></canvas></div>
 </div>
@@ -166,7 +169,9 @@
         <tr><td>N</td><td>orientation (north / course / head up)</td></tr>
         <tr><td>T</td><td>manœuvre d'essai</td></tr>
         <tr><td>Entrée</td><td>acquitter les alertes</td></tr>
-        <tr><td>V</td><td>vue radar / ECDIS / radar + ECDIS</td></tr>
+        <tr><td>V</td><td>vue radar / ECDIS / radar + ECDIS / visuel / passerelle</td></tr>
+        <tr><td>Q / D, Z, X</td><td>regard à gauche / à droite, sur l'avant, sur l'arrière</td></tr>
+        <tr><td>B, molette (visuel)</td><td>jumelles 7×</td></tr>
         <tr><td>ECDIS : glisser, molette</td><td>déplacer la carte, échelle (C : recentrer)</td></tr>
         <tr><td>Espace</td><td>lecture / pause</td></tr>
       </table>

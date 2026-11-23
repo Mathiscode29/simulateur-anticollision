@@ -11,15 +11,17 @@ import { visual } from '../sim/visual';
 import { cursor, geo, resetTM } from './render';
 import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
 import { checkRoute, depthAt, tssAt } from '../sim/chart';
+import { look, lookBy } from './outside';
 import { fmtLat, fmtLon, toLL } from '../core/geo';
 import { aisAssociated } from '../sim/ais';
 
 /** Vue affichée : la simulation tourne quelle que soit la vue. */
-export type View = 'radar' | 'ecdis' | 'split';
+export type View = 'radar' | 'ecdis' | 'split' | 'visual' | 'bridge';
+const VIEWS: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge'];
 export let currentView: View = 'radar';
 function setView(v: View): void {
   currentView = v;
-  document.body.classList.remove('view-radar', 'view-ecdis', 'view-split');
+  document.body.classList.remove(...VIEWS.map((x) => 'view-' + x));
   document.body.classList.add('view-' + v);
 }
 
@@ -199,6 +201,10 @@ const ACT: Record<string, (v: string) => void> = {
   finish() { if (!S.over && S.started) finish(); },
   ackAll() { ackAll(); },
   silence() { S.silencedUntil = performance.now() + 30000; },
+  look(v) { lookBy(+v); },
+  lookFwd() { look.rel = 0; look.aft = false; },
+  lookAft() { look.aft = !look.aft; look.rel = 0; },
+  binoc() { look.binoc = !look.binoc; },
   ecZoom(v) { ecZoom(+v); },
   ecCenter() { centreOnOwn(); },
   ecClr() { S.ecdis.ebl = null; S.ecdis.vrm = null; },
@@ -270,6 +276,8 @@ function soundTick(): void {
 }
 
 export function upd(): void {
+  document.querySelector('.vbar [data-act=binoc]')?.classList.toggle('on', look.binoc);
+  document.querySelector('.vbar [data-act=lookAft]')?.classList.toggle('on', look.aft);
   const o = S.own, Rs = S.radar, e = S.env;
   $('clock').textContent = 'T+' + fT(S.t);
   $('play').textContent = S.paused ? '▶' : '⏸';
@@ -486,7 +494,12 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     else if (k === 'n' || k === 'N') { const seq: RadarSettings['orient'][] = R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU']; setOrient(seq[(seq.indexOf(R().orient) + 1) % seq.length]); }
     else if (k === 't' || k === 'T') setTrial(!R().trial);
     else if (k === 'Enter') ackAll();
-    else if (k === 'v' || k === 'V') setView(currentView === 'radar' ? 'ecdis' : currentView === 'ecdis' ? 'split' : 'radar');
+    else if (k === 'v' || k === 'V') setView(VIEWS[(VIEWS.indexOf(currentView) + 1) % VIEWS.length]);
+    else if (k === 'q' || k === 'Q') lookBy(ev.shiftKey ? -2 : -10);
+    else if (k === 'd' || k === 'D') lookBy(ev.shiftKey ? 2 : 10);
+    else if (k === 'z' || k === 'Z') { look.rel = 0; look.aft = false; }
+    else if (k === 'x' || k === 'X') { look.aft = !look.aft; look.rel = 0; }
+    else if (k === 'b' || k === 'B') look.binoc = !look.binoc;
     else if (k === 'c' || k === 'C') centreOnOwn();
     else done = false;
     if (done) { ev.preventDefault(); upd(); }

@@ -28,6 +28,15 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0 }
 #ecdisWrap { position: relative; width: 100vw; height: 56vh; height: 56dvh; display: none }
 #ecdis { cursor: crosshair }
 body.view-ecdis #radarWrap { display: none }
+#visualWrap { position: relative; width: 100vw; height: 40vh; height: 40dvh; display: none; background: #000 }
+#outside { cursor: ew-resize }
+#radarWrap > canvas, #ecdisWrap > canvas, #visualWrap > canvas { position: absolute; inset: 0 }
+.vbar { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px }
+.vbar button { background: rgba(10,16,22,.72); color: #dfe9f0; border: 1px solid rgba(200,220,235,.3); border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer }
+.vbar button.on { background: #1f6f9a; border-color: #5fb6e0 }
+body.view-visual #radarWrap { display: none }
+body.view-visual #visualWrap, body.view-bridge #visualWrap, body.view-bridge #ecdisWrap { display: block }
+body.view-bridge #left { flex-direction: column; align-items: center }
 body.view-ecdis #ecdisWrap, body.view-split #ecdisWrap { display: block }
 body.view-split #left { flex-direction: column; align-items: center }
 body.view-split #radarWrap { width: min(100vw, 40vh) }
@@ -110,11 +119,17 @@ details { margin: 8px 0 } summary { cursor: pointer; color: var(--ac); font-weig
   #left { flex: 1; align-items: center }
   #radarWrap { width: min(calc(100vh - 44px), calc(100vw - 480px)); width: min(calc(100dvh - 44px), calc(100vw - 480px)) }
   #panel { flex: none; width: 480px; border-left: 1px solid var(--ln) }
-  #left { min-width: 0; gap: 0 }
+  #left { min-width: 0; min-height: 0; gap: 0; overflow: hidden }
   body.view-ecdis #ecdisWrap { width: 100%; height: 100% }
   body.view-split #left { flex-direction: row; align-items: center }
   body.view-split #radarWrap { flex: none; width: min(calc(100dvh - 44px), calc((100vw - 480px) * 0.5)) }
   body.view-split #ecdisWrap { flex: 1; width: auto; height: 100%; border-left: 1px solid var(--ln) }
+  body.view-visual #visualWrap { width: 100%; height: 100% }
+  /* triangle du chef de quart : visuel en haut, radar en bas à gauche, ECDIS en bas à droite */
+  body.view-bridge #left { display: grid; align-items: stretch; justify-items: stretch; grid-template-columns: calc((100dvh - 44px) * 0.54) minmax(0, 1fr); grid-template-rows: minmax(0, 46fr) minmax(0, 54fr) }
+  body.view-bridge #visualWrap { grid-column: 1 / 3; width: auto; height: auto; border-bottom: 1px solid var(--ln) }
+  body.view-bridge #radarWrap { width: auto; height: auto; aspect-ratio: auto }
+  body.view-bridge #ecdisWrap { width: auto; height: auto; border-left: 1px solid var(--ln) }
 }
 @media (max-width: 520px) { .bt, .stcw, header [data-seg=palette] { display: none } }
 @media (max-width: 1200px) { header [data-seg=view] button { padding: 4px 5px } .bt { display: none } }

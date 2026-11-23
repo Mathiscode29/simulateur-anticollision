@@ -64,9 +64,12 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [ ] Bilan rattaché aux compétences STCW (tableau A-II/1)
 - [ ] Zones sur les routes de l'armement (Pas-de-Calais, Gibraltar, détroit de Singapour)
 
-## Phase 5 — Vue passerelle 3D
-- [ ] Vue extérieure (Three.js) liée au radar
-- [ ] Feux et marques conformes au RIPAM, jour / nuit / brume
+## Phase 5 — Vue passerelle
+- [x] Vue extérieure liée à la simulation (canvas 2D en perspective, sans bibliothèque 3D) : regard sur 180°, jumelles 7×, horizon et rotondité, brume, nuit, côte, bouées
+- [x] Feux de navigation selon les secteurs de l'annexe I et marques de jour, jour / nuit / brume
+- [x] Disposition « Passerelle » : triangle du chef de quart (visuel en haut, radar en bas à gauche, ECDIS en bas à droite)
+- [ ] Mouvements de plate-forme (roulis, tangage) et état de la mer selon le vent
+- [ ] Signaux sonores (brume, R34) audibles et relevés au visuel
 
 ## Garde-fous permanents
 - Ergonomie inspirée des consoles du marché, sans logo ni charte de constructeur : la norme IEC suffit

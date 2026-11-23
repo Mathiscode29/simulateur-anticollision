@@ -82,9 +82,16 @@ function avoid(t: Target, u: Target | OwnShip, vs: number | undefined, role: Rol
   if (role === 'R19' && ob >= 90 && ob <= 180) dir = -1; // R19d(ii) : ne pas venir vers un navire par le travers ou sur l'arrière
   if (role === 'overtaking') dir = findAltVs(t, u, 1, 30, want) <= findAltVs(t, u, -1, 30, want) ? 1 : -1;
   if (t.beh === 'wrong') dir = -dir;
-  const alt = findAltVs(t, u, dir, t.beh === 'late' ? 15 : 30, want);
-  t.cmdHdg = n360(t.hdg + dir * alt);
+  let alt = findAltVs(t, u, dir, t.beh === 'late' ? 15 : 30, want);
+  // pas d'évitement vers les petits fonds : essayer l'autre bord, sinon réduire la vitesse en gardant la route
+  const shoal = (d: number, a: number) => { const v = vec(t.hdg + d * a, 1.5); return depthAt(t.x + v.x, t.y + v.y) < 25; };
   let sp = '';
+  if (shoal(dir, alt)) {
+    const alt2 = findAltVs(t, u, -dir, 30, want);
+    if (!shoal(-dir, alt2)) { dir = -dir; alt = alt2; }
+    else { alt = 0; t.cmdStw = t.baseStw * 0.4; sp = ' (petits fonds : a réduit sa vitesse au lieu de virer)'; }
+  }
+  t.cmdHdg = n360(t.hdg + dir * alt);
   if (role === 'R19' && t.beh === 'good' && (ob < 70 || ob > 290)) { t.cmdStw = t.baseStw * 0.5; sp = ' et a réduit sa vitesse de moitié'; }
   a.state = 'avoid'; a.vs = vs;
   a.info = `a viré de ${alt}° sur ${dir > 0 ? 'tribord' : 'bâbord'}${sp} à TCPA ${fMin(c.tcpa)} (${range.toFixed(1)} NM)${vs === undefined ? '' : ` pour éviter ${nameOf(u)}`}`;

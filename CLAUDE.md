@@ -25,14 +25,15 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
             rules.ts (roleOf + IA des cibles : évitement du porteur et des autres cibles, R17a(ii), dernière minute),
             faults.ts (avaries machine/barre, abordage entre cibles, réparation, messages VHF/AIS nominatifs), assessment.ts (suivi des situations, évaluation, rapport),
             scenarios.ts (22 exercices sur 4 niveaux, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
-            signaux de brume), loop.ts (pas de simulation)
+            signaux de brume, feux et marques en 3D pour la vue extérieure), loop.ts (pas de simulation)
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
             ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD),
-            controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
+            outside.ts (vue extérieure canvas 2D en perspective : regard ± 90°, jumelles, horizon, brume, nuit, côte, cibles et feux),
+            controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
-            trafic.test.ts (évitement entre cibles, avaries, changement de rôle)
+            trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D et marques de jour)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md (sources et limites de la carte)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
@@ -48,7 +49,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
 - Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneAhead`, `laneFill`.
 - Positions : le moteur travaille en plan local (NM) ; toute donnée géographique est saisie en WGS 84 et convertie par `core/geo.ts`. Affichage au format marin (51°02,345'N 001°23,456'E).
-- Les vues (radar, ECDIS) ne font que lire `S` : changer de vue n'interrompt jamais la simulation.
+- Les vues (radar, ECDIS, vue extérieure) ne font que lire `S` : changer de vue n'interrompt jamais la simulation. La vue extérieure reste volontairement simple (canvas 2D, pas de bibliothèque 3D) pour rester fluide.
 - Toute modification de `rules.ts` ou `assessment.ts` s'accompagne d'un test dans `tests/`.
 - Les tests qui supposent un trafic sans incident forcent `S.env.faults = 'off'` (les avaries aléatoires sont « rares » par défaut).
 - Chaque cible a un nom (`vname`), repris par l'AIS : tout message concernant une cible la désigne par son nom, sa piste radar et sa position relative (`callName`).
