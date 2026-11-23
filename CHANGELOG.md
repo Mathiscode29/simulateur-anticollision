@@ -7,6 +7,12 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.3 — 23 novembre 2026
+Pont du VLCC détaillé, nuages arrondis, rendu 3D retiré.
+- Pont du pétrolier porteur : collecteurs de cargaison, passerelle de pont sur supports, manifold (traverses et colonnes montantes), grues de manutention des flexibles, panneaux de citerne, soupapes P/V, mât de dégazage, guindeaux ; l'épaisseur des tubes suit la perspective.
+- Nuages en cumulus arrondis (bulles sur une base plate, ombre sous la base).
+- Rendu 3D WebGL supprimé, ainsi que la bibliothèque three.js : le simulateur n'a plus aucune dépendance d'exécution.
+
 ## V1.2 — 23 novembre 2026
 Vue extérieure en 2D « en blocs » par défaut, pour la fluidité.
 - Retour au rendu 2D en perspective comme rendu par défaut : le rendu WebGL de la V1.1 était trop lourd sur les ordinateurs courants.

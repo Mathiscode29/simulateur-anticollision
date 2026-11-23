@@ -1,5 +1,5 @@
 /**
- * Vue extérieure depuis la passerelle (canvas 2D, perspective simple, sans bibliothèque 3D), rendu par défaut.
+ * Vue extérieure depuis la passerelle (canvas 2D, perspective simple, sans bibliothèque 3D).
  * Style volontairement « en blocs » (arcade) : la fluidité prime sur le photoréalisme.
  *
  * - Œil à 32 m au-dessus de l'eau, à l'arrière (passerelle du VLCC), regard orientable sur 180° (± 90° autour de
@@ -23,24 +23,6 @@ import { TELE } from '../core/data';
 import { D2R, adiff, brgOf, clamp, n360, p3 } from '../core/util';
 import { CHART, NRAYS, depthAt, rayIndex } from '../sim/chart';
 import { dayShapes, mastH, navLights3D, shipKind } from '../sim/visual';
-
-/** Rendu WebGL (three.js), chargé seulement à la demande : le rendu 2D en blocs est le rendu par défaut. */
-type R3D = typeof import('./outside3d');
-let r3d: R3D | null = null, r3dLoading = false;
-const use3D = (): boolean => !!r3d && r3d.use3D();
-/** Rendu 3D actif. */
-export const is3D = use3D;
-/** Bascule 2D / 3D ; le module 3D et three.js ne sont téléchargés qu'au premier passage en 3D. */
-export async function toggle3D(): Promise<void> {
-  const on = !use3D();
-  try { localStorage.setItem('rendu3d.v2', on ? '1' : '0'); } catch { /* stockage indisponible */ }
-  if (on && !r3d) {
-    if (r3dLoading) return;
-    r3dLoading = true;
-    try { const m = await import('./outside3d'); if (cv.parentElement && m.init3D(cv.parentElement)) r3d = m; } finally { r3dLoading = false; }
-  }
-  r3d?.set3D(on);
-}
 
 export const NM = 1852, RE = (6371000 * 7) / 6, EYE = 32;
 export const FOV = 62, FOV_BINO = 7.5;
@@ -68,8 +50,6 @@ export function initOutside(canvas: HTMLCanvasElement): void {
   cv.addEventListener('pointerup', () => { drag = null; });
   cv.addEventListener('pointerleave', () => { hover = null; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); look.binoc = e.deltaY < 0; }, { passive: false });
-  // rendu WebGL sous le calque 2D, seulement si l'utilisateur l'a choisi (rendu 2D par défaut, plus léger)
-  try { if (localStorage.getItem('rendu3d.v2') === '1') void toggle3D(); } catch { /* stockage indisponible */ }
 }
 
 function resize(): void {
@@ -181,15 +161,6 @@ export function drawOutside(): void {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
 
-  if (use3D()) {
-    ctx.clearRect(0, 0, W, H);
-    r3d!.render3D({ W, H, yaw, rel, hfov: hf, binoc: look.binoc, aft: look.aft });
-    const bf = beaufort(S.env.windKn);
-    if (look.binoc) binocMask3D(); else { bridgeFrame(sk); if (look.inst) instruments(bf); }
-    hud(hf, bf);
-    return;
-  }
-
   // monde (incliné par le roulis apparent)
   ctx.save();
   ctx.translate(W / 2, cy); ctx.rotate(-tilt); ctx.translate(-W / 2, -cy);
@@ -231,21 +202,24 @@ function stars(yH: number): void {
   }
 }
 
-/** Nuages en blocs, de jour par bonne visibilité : amas de pavés qui dérivent lentement avec le vent. */
+/** Cumulus de beau temps : quelques bulles arrondies sur une base plate, ombre sous la base ; dérive lente avec le vent. */
 function clouds(sk: Sky, yH: number): void {
-  const hf = fov(), path = new Path2D(), shadow = new Path2D(), drift = S.t * 0.0004 * S.env.windKn;
+  const hf = fov(), body = new Path2D(), shade = new Path2D(), drift = S.t * 0.0004 * S.env.windKn;
+  const blob = (p: Path2D, x: number, y: number, rx: number, ry: number) => { p.moveTo(x + rx, y); p.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI); };
   for (let i = 0; i < 24; i++) {
     const az = n360(i * 163.7 + drift * (1 + (i % 3) * 0.3)), el = 2.5 + ((i * 7.7) % 13), w = 3 + ((i * 5.3) % 8), rel = adiff(az, cam.yaw);
     if (Math.abs(rel) > hf / 2 + w) continue;
-    const x = W / 2 + Math.tan(rel * D2R) * cam.F, y = cam.cy - Math.tan(el * D2R) * cam.F, pw = w * D2R * cam.F, ph = Math.max(3, pw * 0.2);
+    const x = W / 2 + Math.tan(rel * D2R) * cam.F, y = cam.cy - Math.tan(el * D2R) * cam.F, pw = w * D2R * cam.F, u = Math.max(2, pw * 0.16);
     if (y > yH - 4) continue;
-    path.rect(x - pw / 2, y - ph, pw, ph);
-    path.rect(x - pw * 0.32, y - ph * 1.8, pw * 0.5, ph * 0.9);
-    path.rect(x + pw * 0.02, y - ph * 2.4, pw * 0.28, ph * 0.7);
-    shadow.rect(x - pw / 2, y - ph * 0.3, pw, ph * 0.3);
+    const h1 = (i * 0.618) % 1, h2 = (i * 0.414) % 1;
+    const puffs: [number, number, number][] = [
+      [-0.3, 0.75, 0.85 + 0.3 * h1], [-0.08, 1.15, 1.2 + 0.4 * h2], [0.16, 1.0, 1.0 + 0.3 * h1], [0.34, 0.7, 0.7 + 0.2 * h2],
+    ];
+    for (const [k, yy, r] of puffs) { blob(shade, x + k * pw, y - yy * u + u * 0.35, r * u, r * u * 0.9); blob(body, x + k * pw, y - yy * u, r * u, r * u * 0.9); }
+    blob(shade, x, y - u * 0.05, pw * 0.48, u * 0.55); blob(body, x, y - u * 0.4, pw * 0.48, u * 0.55);
   }
-  ctx.fillStyle = mix([250, 251, 252], sk.hor, 0.2); ctx.fill(path);
-  ctx.fillStyle = mix([196, 206, 216], sk.hor, 0.3); ctx.fill(shadow);
+  ctx.fillStyle = mix([188, 199, 211], sk.hor, 0.25); ctx.fill(shade);
+  ctx.fillStyle = mix([250, 251, 252], sk.hor, 0.15); ctx.fill(body);
 }
 
 /**
@@ -833,11 +807,43 @@ function ownDeck(sk: Sky): void {
   const fb = 8, a0 = eyeA + 8;
   poly([[a0, -B / 2, 0], [L / 2 - 30, -B / 2, 0], [L / 2, 0, 0], [L / 2 - 30, B / 2, 0], [a0, B / 2, 0], [a0, B / 2, fb], [L / 2 - 30, B / 2, fb], [L / 2, 0, fb + 3], [L / 2 - 30, -B / 2, fb], [a0, -B / 2, fb]], side);
   poly([[a0, -B / 2, fb], [L / 2 - 30, -B / 2, fb], [L / 2, 0, fb + 3], [L / 2 - 30, B / 2, fb], [a0, B / 2, fb]], deck);
-  ctx.strokeStyle = mix(dark(hex('#c9c3b5'), lightK), sk.hor, fogV); ctx.lineWidth = 1.5;
-  const seg = (a: number, b: number, z: number, a2: number, b2: number, z2: number) => { const p = P(a, b, z), q = P(a2, b2, z2); if (p && q) { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); } };
-  seg(a0, 0, fb + 2, L / 2 - 25, 0, fb + 2); // passerelle de pont (catwalk)
-  seg(L / 2 - 15, 0, fb + 3, L / 2 - 15, 0, fb + 26); // mât avant
-  for (const b of [-14, 14]) seg(-5, b, fb, -5, b, fb + 14); // poteaux de manifold
+  // équipement de pont : tuyautage de cargaison, passerelle (catwalk), manifold et ses grues, panneaux de citerne, soupapes
+  const col = (c: string) => mix(dark(hex(c), lightK), sk.hor, fogV);
+  const F3 = (a: number, b: number, z: number): [number, number, number] | null => {
+    const da = a - eyeA, f = da * cr + b * sr;
+    return f < 3 ? null : [W / 2 + ((-da * sr + b * cr) / f) * cam.F, cam.cy0 - ((z - EYE) / f) * cam.F, f];
+  };
+  /** Tube de diamètre wm (m), découpé en tronçons pour que son épaisseur suive la perspective. */
+  const pipe = (a: number, b: number, z: number, a2: number, b2: number, z2: number, wm: number, c: string) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(a2 - a, b2 - b, z2 - z) / 15));
+    ctx.strokeStyle = col(c);
+    for (let k = 0; k < n; k++) {
+      const t0 = k / n, t1 = (k + 1) / n;
+      const p = F3(a + (a2 - a) * t0, b + (b2 - b) * t0, z + (z2 - z) * t0), q = F3(a + (a2 - a) * t1, b + (b2 - b) * t1, z + (z2 - z) * t1);
+      if (!p || !q) continue;
+      ctx.lineWidth = clamp((wm * cam.F) / ((p[2] + q[2]) / 2), 0.6, 16);
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    }
+  };
+  const aF = L / 2 - 32;
+  // panneaux de citerne (plaques sur le pont, de part et d'autre de l'axe)
+  for (const a of [-80, -45, 25, 60, 95]) for (const b of [-12, 12]) poly([[a - 2, b - 2, fb + 0.4], [a + 2, b - 2, fb + 0.4], [a + 2, b + 2, fb + 0.4], [a - 2, b + 2, fb + 0.4]], col('#8f5a48'));
+  ctx.lineCap = 'butt';
+  for (const b of [-3.2, -1.6, 1.6, 3.2]) pipe(a0, b, fb + 0.8, aF, b, fb + 0.8, 0.7, '#b9b4a6'); // collecteurs de cargaison
+  for (let a = a0 + 12; a < aF; a += 16) pipe(a, 0, fb, a, 0, fb + 2, 0.25, '#a8a396'); // supports de la passerelle
+  pipe(a0, 0, fb + 2, aF + 8, 0, fb + 2, 1.1, '#d6d1c4'); // passerelle de pont (catwalk)
+  for (const a of [-9, -6, -3, 0]) { // manifold : traverses et colonnes montantes
+    pipe(a, -23, fb + 1.6, a, 23, fb + 1.6, 0.6, '#c9c3b5');
+    for (const b of [-23, 23]) pipe(a, b, fb + 1.6, a, b, fb + 3.2, 0.5, '#c9c3b5');
+  }
+  for (const s2 of [-1, 1]) { // grues de manutention des flexibles
+    pipe(-14, s2 * 20, fb, -14, s2 * 20, fb + 14, 0.9, '#d1b13a');
+    pipe(-14, s2 * 20, fb + 13, -3, s2 * 9, fb + 19, 0.5, '#d1b13a');
+  }
+  for (const a of [-80, -45, 25, 60, 95]) for (const b of [-18, 18]) pipe(a, b, fb, a, b, fb + 3.5, 0.35, '#c9c3b5'); // soupapes P/V
+  pipe(-60, 7, fb, -60, 7, fb + 12, 0.6, '#c9c3b5'); // mât de dégazage
+  for (const b of [-6, 6]) poly([[L / 2 - 26, b - 2, fb + 3.5], [L / 2 - 22, b - 2, fb + 3.5], [L / 2 - 22, b + 2, fb + 3.5], [L / 2 - 26, b + 2, fb + 3.5]], col('#3b3f43')); // guindeaux
+  pipe(L / 2 - 15, 0, fb + 3, L / 2 - 15, 0, fb + 26, 0.8, '#c9c3b5'); // mât avant
   ctx.lineWidth = 1;
 }
 
@@ -855,14 +861,6 @@ function bridgeFrame(sk: Sky): void {
 }
 
 /** Masque des jumelles sur le calque 2D transparent posé sur le rendu WebGL. */
-function binocMask3D(): void {
-  const R = Math.min(H * 0.47, W * 0.26), dx = R * 0.62;
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath(); ctx.arc(W / 2 - dx, H / 2, R, 0, 7); ctx.arc(W / 2 + dx, H / 2, R, 0, 7); ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-}
-
 function binocMask(): void {
   const R = Math.min(H * 0.47, W * 0.26), dx = R * 0.62;
   ctx.globalCompositeOperation = 'destination-in';

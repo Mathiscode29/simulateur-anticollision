@@ -74,6 +74,7 @@ Objectif : un simulateur d'anticollision de niveau chef de quart / commandant, s
 - [x] Console d'instruments dans la vue extérieure, reflets des feux, éclairage de pont, bouées détaillées
 - [x] V1.1 (V5a) : vue extérieure en WebGL (three.js) : mer à vagues de Gerstner, reflets et moutons, relief côtier, lumières de côte, silhouettes par type de navire, brouillard de Koschmieder, rotondité ; rendu 2D de secours
 - [x] V1.2 : retour au rendu 2D par défaut (fluidité), silhouettes en blocs par famille de navire, ciel, mer et relief en paliers ; 3D en option chargée à la demande
+- [x] V1.3 : pont du VLCC détaillé (tuyautage, manifold, grues), cumulus arrondis ; rendu 3D et three.js retirés
 - [ ] Signaux sonores (brume, R34) audibles et relevés au visuel
 - [ ] Navires au mouillage, ports et feux de port ; silhouettes plus détaillées (V5a suite)
 
