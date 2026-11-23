@@ -49,6 +49,8 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 
 ## Conventions
 
+- Versions : V1.0 = point de départ ; chaque mise à jour publiée augmente la version d'un dixième (V1.1, V1.2 … V2.0). Mettre à jour `src/core/version.ts`, `package.json` et `CHANGELOG.md` dans le commit de la mise à jour. La version initiale est conservée dans la branche `version-initiale` (et un dépôt de sauvegarde séparé).
+
 - Langue : interface, commentaires, messages de commit et docs en **français**, vocabulaire professionnel maritime (CPA/TCPA, relèvement, aspect, abattée, privilégié/non privilégié…).
 - Unités : milles nautiques, nœuds, degrés, secondes. Repère local x = est, y = nord ; caps et relèvements de 0 à 360 dans le sens horaire depuis le nord.
 - Pas de simulation fixe de 0,25 s (`DT`), indépendant de l'affichage et de l'accélération du temps. Le radar date chaque écho du passage du faisceau sur son relèvement ; l'écran radar est affiché avec un pas de retard (`tv = S.t − DT + fraction`) pour un balayage continu.

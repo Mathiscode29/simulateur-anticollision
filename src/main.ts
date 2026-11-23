@@ -1,4 +1,6 @@
 import './ui/style.css';
+import { VERSION } from './core/version';
+(document.getElementById('ver') as HTMLElement).textContent = `V${VERSION}`;
 import { S } from './core/state';
 import { newScenario } from './sim/scenarios';
 import { simStep, DT } from './sim/loop';
