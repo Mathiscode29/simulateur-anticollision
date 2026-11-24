@@ -105,6 +105,7 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number, now = S.t): voi
 
 /** Cibles : giration à taux limité vers le cap ordonné, vitesse du 1er ordre. */
 export function stepT(t: Target, dt: number): void {
+  if (t.berthed) { t.rot = 0; t.stw = 0; t.vx = 0; t.vy = 0; return; } // amarré au port
   if (t.type === 'anchor') {
     // évité au vent (au courant par vent faible), position fixe
     const e = S.env, lie = e.windKn >= 6 ? e.windFrom : n360(e.curSet + 180), d = adiff(lie, t.hdg);
@@ -114,7 +115,7 @@ export function stepT(t: Target, dt: number): void {
   const e = adiff(t.cmdHdg, t.hdg), rr = clamp(e * 0.06, -t.maxRot, t.maxRot);
   t.rot += (rr - t.rot) * Math.min(1, dt / t.tau);
   t.hdg = n360(t.hdg + t.rot * dt);
-  t.stw += ((t.cmdStw - t.stw) / (t.cmdStw < t.stw ? t.dec : t.acc)) * dt; // un NUC (consigne 0) perd son erre
+  t.stw += ((t.cmdStw - t.stw) / (t.cmdStw < t.stw ? (t.astern ? t.dec * 0.35 : t.dec) : t.acc)) * dt; // un NUC (consigne 0) perd son erre
   const g = gv(t.hdg, t.stw, t.wind);
   t.vx = g.x; t.vy = g.y;
   t.x += g.x * K2N * dt; t.y += g.y * K2N * dt;

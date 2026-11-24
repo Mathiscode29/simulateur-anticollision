@@ -76,6 +76,10 @@ export interface Target {
   fault?: Fault;
   /** Navire qui suit une voie du DST : voie, sens (1 = sens réglementaire, −1 = contresens), décalage latéral (NM). */
   lane?: string; laneDir?: 1 | -1; laneOff?: number;
+  /** Navire rendu au port au bout d'une voie d'entrée : amarré, position fixe (ni dérive au vent ni au courant). */
+  berthed?: boolean;
+  /** Machine en arrière pour casser l'erre (arrivée au port trop vite) : décélération ≈ 3 fois plus forte. */
+  astern?: boolean;
 }
 
 export interface TrialResult { cpa: number; tcpa: number; px: number; py: number; rvx: number; rvy: number }

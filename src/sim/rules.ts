@@ -17,7 +17,7 @@ import { S, type Behaviour, type OwnShip, type Role, type Target, type TargetTyp
 import { SPECIAL } from '../core/data';
 import { K2N, adiff, brgOf, cpaOf, fMin, n360, pm, rnd, vec } from '../core/util';
 import { gv } from './physics';
-import { depthAt, laneOf, laneSteer, polyLength, projOnPolyline } from './chart';
+import { CHART, depthAt, laneOf, laneSteer, polyLength, projOnPolyline } from './chart';
 import { jammedHeading } from './faults';
 
 export interface Vessel { x: number; y: number; hdg: number; stw: number; type: TargetType | 'power' }
@@ -143,9 +143,35 @@ function emergency(t: Target): { u: Target | OwnShip; vs: number | undefined; c:
   return best;
 }
 
-/** Décision d'une cible (appelée toutes les 2 s simulées). */
+/** Décision d'une cible (appelée toutes les 2 s simulées), puis garde de profondeur. */
 export function aiStep(t: Target): void {
-  if (t.type === 'anchor') return; // au mouillage : ni route ni manœuvre
+  aiDecide(t);
+  depthGuard(t);
+}
+
+/**
+ * Garde de profondeur : un navire ne s'engage pas sur des petits fonds, que ce soit en suivant sa voie ou en manœuvrant
+ * pour éviter. Si le cap ordonné mène à des fonds inférieurs au seuil dans les 1,2 NM, on retient le cap sain le plus
+ * proche (tribord d'abord, par pas de 10°) ; sans issue, le navire ralentit. Seuil : 20 m pour un navire de voie ou de
+ * plus de 100 m, 8 m sinon, jamais plus profond que les fonds où il se trouve moins 2 m (chenal ou bassin de port).
+ * Ne s'applique pas aux navires des chenaux de port (route draguée), au mouillage, amarrés, NUC ou en manœuvre d'urgence.
+ */
+export function depthGuard(t: Target): void {
+  if (t.type === 'anchor' || t.type === 'nuc' || t.berthed || t.ai.last || t.stw < 1) return;
+  if (t.lane && CHART.fwLanes.some((l) => l.id === t.lane)) return;
+  const thr = Math.min(t.lane || t.L > 100 ? 20 : 8, depthAt(t.x, t.y) - 2);
+  const clear = (h: number) => [0.3, 0.7, 1.2].every((d) => { const v = vec(h, d); return depthAt(t.x + v.x, t.y + v.y) >= thr; });
+  if (clear(t.cmdHdg)) return;
+  for (let k = 10; k <= 120; k += 10) for (const sd of [1, -1]) {
+    const h = n360(t.cmdHdg + sd * k);
+    if (clear(h)) { t.cmdHdg = h; return; }
+  }
+  t.cmdStw = Math.min(t.cmdStw, 3); // pas de cap sain : on réduit
+}
+
+/** Décision d'une cible : route de base (voie, pêche), urgence, évitement du porteur et des autres cibles. */
+function aiDecide(t: Target): void {
+  if (t.type === 'anchor' || t.berthed) return; // au mouillage ou amarré : ni route ni manœuvre
   const o = S.own, a = t.ai, rx = o.x - t.x, ry = o.y - t.y, range = Math.hypot(rx, ry);
   const c = cpaOf(rx, ry, (o.vx - t.vx) * K2N, (o.vy - t.vy) * K2N);
   // navire qui suit une voie du DST : la route de base suit l'axe de la voie (avec son décalage latéral)
@@ -160,9 +186,14 @@ export function aiStep(t: Target): void {
       // voie d'entrée de port : réduction progressive puis arrêt au bout de l'axe (le navire est rendu à quai)
       if (l.arrive) {
         const rest = polyLength(l.axis) - projOnPolyline(l.axis, t.x, t.y).s;
-        // vitesse compatible avec la constante de décélération du navire (≈ distance d'arrêt), arrêt à 0,4 NM de la fin
-        const vMax = rest < 0.4 ? 0 : ((rest - 0.4) * 3600) / (1.5 * t.dec);
+        // vitesse compatible avec la constante de décélération du navire (≈ distance d'arrêt), arrêt à 0,1 NM de la fin
+        const vMax = rest < 0.1 ? 0 : Math.max(0.8, ((rest - 0.1) * 3600) / (1.5 * t.dec)); // 0,8 kn au moins pour finir l'approche
         if (vMax < t.baseStw) { t.baseStw = vMax; if (a.state === 'transit') t.cmdStw = vMax; }
+        // trop d'erre pour s'arrêter avant la fin de l'axe : on bat en arrière
+        t.astern = t.stw > 0.3 && rest - 0.1 < (t.stw * t.dec) / 3600;
+        if (t.astern) t.cmdStw = 0;
+        // stoppé au bout de l'axe : amarré (sinon le courant et le vent le feraient dériver à terre)
+        if (rest < 0.15 && t.stw < 0.3) { t.berthed = true; if (t.ais) t.ais.status = 'Amarré'; }
       }
     }
   }

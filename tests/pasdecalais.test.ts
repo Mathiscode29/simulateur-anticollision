@@ -144,6 +144,19 @@ describe('règle 10 et ECDIS', () => {
     }
     expect(CHART.key).toBe('pdc');
   });
+  it('garde de profondeur : une cible qui fait route sur le Varne s\'en écarte', () => {
+    start('pdc_rogue');
+    const t = S.targets.find((x) => x.L > 100)!;
+    S.targets = [t];
+    t.lane = undefined; t.beh = 'passive'; S.own.tele = 2; S.own.x += 30;
+    const v = at(dm(50, 56.5), dm(1, 17.5)), p = at(dm(51, 1.5), dm(1, 24)); // centre du Varne et départ à 5 NM au NE
+    expect(depthAt(v.x, v.y)).toBeLessThan(15);
+    const h = n360((Math.atan2(v.x - p.x, v.y - p.y) * 180) / Math.PI);
+    Object.assign(t, { x: p.x, y: p.y, hdg: h, cmdHdg: h, baseHdg: h, stw: 10, cmdStw: 10, baseStw: 10 });
+    let mn = 99;
+    for (let i = 0; i < 40 * 240; i++) { simStep(); mn = Math.min(mn, depthAt(t.x, t.y)); }
+    expect(mn).toBeGreaterThan(15);
+  });
   it('navire à contresens : rencontre de face dans la voie descendante', () => {
     let ok = 0;
     for (let k = 0; k < 4; k++) {

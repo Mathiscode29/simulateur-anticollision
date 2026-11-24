@@ -23,7 +23,8 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
             vérification de route, chenaux et bassins dragués, voies de chenal, blocs de ville), ais.ts (AIS classes A/B, cadences, association radar/AIS),
             nav.ts (alarmes ECDIS, échouement, heurt de quai par l'étrave ou la poupe, règle 9, règle 10),
             route.ts (route prévue, points tournants, écart latéral XTE),
-            rules.ts (roleOf + IA des cibles : évitement du porteur et des autres cibles, R17a(ii), dernière minute),
+            rules.ts (roleOf + IA des cibles : évitement du porteur et des autres cibles, R17a(ii), dernière minute, garde de profondeur,
+            arrivée au port),
             faults.ts (avaries machine/barre, abordage entre cibles, réparation, messages VHF/AIS nominatifs), assessment.ts (suivi des situations, évaluation, rapport),
             scenarios.ts (32 exercices sur 7 niveaux, exercices de port, navires au mouillage, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
             signaux de brume, feux et marques en 3D pour la vue extérieure), debrief.ts (enregistrement de l'exercice, analyse et moments clés

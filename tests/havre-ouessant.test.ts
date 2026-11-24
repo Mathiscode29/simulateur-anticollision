@@ -85,6 +85,11 @@ describe('Le Havre : carte, chenal et bassins', () => {
     run(40);
     expect(t.stw).toBeLessThan(0.5);
     expect(depthAt(t.x, t.y)).toBeGreaterThan(10);
+    // rendu au port : amarré, il ne dérive plus au courant ni au vent
+    expect(t.berthed).toBe(true);
+    const x = t.x, y = t.y;
+    run(20);
+    expect(Math.hypot(t.x - x, t.y - y)).toBeLessThan(1e-9);
   });
 });
 

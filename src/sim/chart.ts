@@ -89,11 +89,17 @@ function compile(s: ChartSource): Chart {
     fwLanes: [], dredged: [], maxDredged: 0, blocks: [], urban: (s.urban ?? []).map((u) => ({ name: u.name, poly: u.pts.map(llxy) })),
   };
   // deux voies par chenal pour le trafic : entrante (à droite de l'axe en entrant, s'arrête au port) et sortante
+  // Le décalage latéral se resserre sur l'axe 1,2 NM avant l'entrée du port (passe entre les musoirs) et reste nul dans le port.
   for (const f of s.fairways ?? []) {
-    const poly = band(f.axis, f.width).map(llxy), q = f.width / 4;
-    const full = [...f.axis, ...(f.inner ?? [])];
-    c.fwLanes.push({ id: `${f.id}in`, name: `${f.name}, entrée`, polys: [poly], axis: offsetLL(full, q).map(llxy), arrive: true });
-    c.fwLanes.push({ id: `${f.id}out`, name: `${f.name}, sortie`, polys: [poly], axis: offsetLL([...full].reverse(), q).map(llxy) });
+    const poly = band(f.axis, f.width).map(llxy), q = f.width / 4, n = f.axis.length;
+    const end = f.axis[n - 1], prev = f.axis[n - 2];
+    const segNM = Math.hypot((end[0] - prev[0]) * 60, (end[1] - prev[1]) * 60 * Math.cos((end[0] * Math.PI) / 180));
+    const k = segNM > 1.4 ? 1.2 / segNM : 0.5;
+    const taper: [number, number] = [end[0] + (prev[0] - end[0]) * k, end[1] + (prev[1] - end[1]) * k];
+    const full = [...f.axis.slice(0, -1), taper, end, ...(f.inner ?? [])];
+    const ds = full.map((_, i) => (i < n ? q : 0));
+    c.fwLanes.push({ id: `${f.id}in`, name: `${f.name}, entrée`, polys: [poly], axis: offsetLL(full, ds).map(llxy), arrive: true });
+    c.fwLanes.push({ id: `${f.id}out`, name: `${f.name}, sortie`, polys: [poly], axis: offsetLL([...full].reverse(), [...ds].reverse()).map(llxy) });
   }
   c.dredged = [...c.fairways.map((f) => ({ poly: f.poly, depth: f.depth })), ...(s.dredged ?? []).map((d) => ({ poly: d.pts.map(llxy), depth: d.depth }))];
   c.maxDredged = Math.max(0, ...c.dredged.map((d) => d.depth));
@@ -123,13 +129,14 @@ function buildBlocks(c: Chart, s: ChartSource): BlockG[] {
   return out;
 }
 
-/** Décalage latéral d'une ligne géographique (d NM, > 0 à droite). */
-function offsetLL(pts: [number, number][], d: number): [number, number][] {
+/** Décalage latéral d'une ligne géographique (d NM, > 0 à droite ; une valeur par sommet possible). */
+function offsetLL(pts: [number, number][], dd: number | number[]): [number, number][] {
   const la0 = pts[0][0], k = Math.cos((la0 * Math.PI) / 180);
   const xy = pts.map(([la, lo]) => [lo * 60 * k, la * 60]);
   return xy.map((p, i) => {
     const a = xy[Math.max(0, i - 1)], b = xy[Math.min(xy.length - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
     const n = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L];
+    const d = typeof dd === 'number' ? dd : dd[i];
     return [(p[1] + n[1] * d) / 60, (p[0] + n[0] * d) / (60 * k)] as [number, number];
   });
 }
@@ -331,7 +338,9 @@ export function laneSteer(l: LaneG, x: number, y: number, off: number, dir: 1 | 
   const l0 = Math.hypot(A1.x - A0.x, A1.y - A0.y) || 1, l1 = Math.hypot(B1.x - B0.x, B1.y - B0.y) || 1;
   const bs = ((x - A0.x) * (A1.x - A0.x) + (y - A0.y) * (A1.y - A0.y)) / l0, be = ((x - B1.x) * (B1.x - B0.x) + (y - B1.y) * (B1.y - B0.y)) / l1;
   const s0 = be > 0 && p.s >= L - 1e-6 ? L + be : bs < 0 && p.s <= 1e-6 ? bs : p.s;
-  const sv = s0 + dir * 1.5, q = pointAt(A, clamp(sv, 0, L)), ex = sv > L ? sv - L : sv < 0 ? sv : 0;
+  // point visé à 1,5 NM sur l'axe ; 0,4 NM dans un chenal de port (passes étroites entre les musoirs)
+  const look = CHART.fwLanes.includes(l) ? 0.4 : 1.5;
+  const sv = s0 + dir * look, q = pointAt(A, clamp(sv, 0, L)), ex = sv > L ? sv - L : sv < 0 ? sv : 0;
   if (ex !== 0) { const u = vec(q.brg, ex); q.x += u.x; q.y += u.y; }
   const nb = (q.brg + 90) * (Math.PI / 180), c = CHART, inLane = (u: number, v: number) => l.polys.some((pl) => inPoly(pl, u, v));
   // point acceptable : dans la voie, ou dans une zone de prudence, mais jamais dans une zone de séparation ni côtière
