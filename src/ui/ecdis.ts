@@ -18,6 +18,7 @@ import { legData } from '../sim/route';
 import { trueV } from '../sim/radar';
 import { aisAssociated, aisLost, aisPos } from '../sim/ais';
 import { isUnackedDanger } from '../sim/alerts';
+import { predicted } from '../sim/predict';
 
 type PalKey = 'DAY' | 'DUSK' | 'NIGHT';
 interface EPal {
@@ -38,12 +39,15 @@ export const EPAL: Record<PalKey, EPal> = {
     hud: 'rgba(0,0,0,.86)', hudTxt: '#6d7d88', grid: 'rgba(80,95,105,.16)', ebl: '#3c7d58' },
 };
 
-export const E_RANGES = [0.75, 1.5, 3, 6, 12, 24];
+export const E_RANGES = [0.25, 0.5, 0.75, 1.5, 3, 6, 12, 24];
 
 let cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D;
 let W = 0, H = 0, DPR = 1;
-/** Caméra : centre (NM), demi-hauteur affichée (NM), suivi du porteur. */
-export const view = { cx: 0, cy: 0, range: 6, follow: true };
+/** Caméra : centre (NM), demi-hauteur affichée (NM), suivi du porteur, avance du centre sur la route (fraction de l'échelle). */
+interface View { cx: number; cy: number; range: number; follow: boolean; lead: number }
+export let view: View = { cx: 0, cy: 0, range: 6, follow: true, lead: 0.35 };
+/** Dessin en cours dans l'ECDIS incrusté (vue visuelle). */
+let isMini = false;
 export const ecur: { x: number | null; y: number | null } = { x: null, y: null };
 /** Objet sélectionné à la souris (outil Info). */
 export let picked: { kind: 'ais' | 'arpa' | 'mark' | 'own'; id: string | number } | null = null;
@@ -159,7 +163,7 @@ export function drawEcdis(): void {
   const palKey = S.radar.palette, pal = EPAL[palKey], o = S.own, E = S.ecdis, k = kpx();
   ensureCaches(pal, palKey);
   if (view.follow) {
-    const sog = Math.hypot(o.vx, o.vy), cog = sog > 0.5 ? brgOf(o.vx, o.vy) : o.hdg, v = vec(cog, view.range * 0.35);
+    const sog = Math.hypot(o.vx, o.vy), cog = sog > 0.5 ? brgOf(o.vx, o.vy) : o.hdg, v = vec(cog, view.range * view.lead);
     view.cx = o.x + v.x; view.cy = o.y + v.y;
   }
   const fs = clamp(Math.min(W, H) / 70, 10, 13);
@@ -197,13 +201,55 @@ export function drawEcdis(): void {
   drawTrack(pal);
   drawTargets(pal, fs);
   drawOwn(pal, k);
-  drawEbl(pal, k);
-  drawHud(pal, fs);
+  if (!isMini) drawEbl(pal, k);
+  if (isMini) drawMiniHud(pal, fs); else drawHud(pal, fs);
+}
+
+// ---------------------------------------------------------------- ECDIS incrusté (vue visuelle)
+
+const mini = { cv: null as HTMLCanvasElement | null, ctx: null as CanvasRenderingContext2D | null, W: 0, H: 0, DPR: 1,
+  view: { cx: 0, cy: 0, range: 0.5, follow: true, lead: 0.12 } as View, mode: 'AUTO' as 'AUTO' | number };
+const MINI_STEPS: ('AUTO' | number)[] = ['AUTO', 0.25, 0.5, 0.75, 1.5, 3];
+
+export function initMini(canvas: HTMLCanvasElement): void {
+  mini.cv = canvas; mini.ctx = canvas.getContext('2d')!;
+  const rs = () => {
+    const r = canvas.getBoundingClientRect();
+    mini.DPR = Math.min(2, window.devicePixelRatio || 1); mini.W = r.width; mini.H = r.height;
+    canvas.width = Math.max(1, Math.round(r.width * mini.DPR)); canvas.height = Math.max(1, Math.round(r.height * mini.DPR));
+  };
+  new ResizeObserver(rs).observe(canvas);
+  rs();
+}
+/** Clic sur l'incrustation : échelle suivante (AUTO, puis échelles fixes). */
+export function miniCycle(): void { mini.mode = MINI_STEPS[(MINI_STEPS.indexOf(mini.mode) + 1) % MINI_STEPS.length]; }
+/** Échelle automatique de l'incrustation : zoom sur le navire quand il manœuvre à faible vitesse. */
+export function miniAutoRange(sog: number): number { return sog < 2.5 ? 0.25 : sog < 5 ? 0.5 : sog < 9 ? 0.75 : 1.5; }
+
+export function drawMini(): void {
+  if (!mini.cv || !mini.ctx || mini.cv.offsetParent === null || !mini.W || !mini.H) return;
+  const o = S.own;
+  mini.view.range = mini.mode === 'AUTO' ? miniAutoRange(Math.hypot(o.vx, o.vy)) : mini.mode;
+  const save = { cv, ctx, W, H, DPR, view };
+  cv = mini.cv; ctx = mini.ctx; W = mini.W; H = mini.H; DPR = mini.DPR; view = mini.view; isMini = true;
+  try { drawEcdis(); } finally { ({ cv, ctx, W, H, DPR, view } = save); isMini = false; }
+}
+
+function drawMiniHud(pal: EPal, fs: number): void {
+  const o = S.own, E = S.ecdis, sog = Math.hypot(o.vx, o.vy);
+  ctx.font = `600 ${fs * 0.85}px ui-monospace,Menlo,monospace`;
+  box(4, 4, [
+    `ECDIS ${view.range} NM${mini.mode === 'AUTO' ? ' AUTO' : ''}`,
+    `VF ${sog.toFixed(1)} kn  ROT ${(o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60)}°/min`,
+    E.pred > 0 ? `Prédicteur ${E.pred >= 60 ? E.pred / 60 + ' min' : E.pred + ' s'}` : 'Prédicteur arrêté',
+  ], pal, fs * 0.85, 'left', pal.text);
+  ctx.font = `${fs * 0.68}px system-ui,sans-serif`;
+  box(4, H - fs * 1.3 - 6, ['CARTE SCHÉMATIQUE — NON DESTINÉE À LA NAVIGATION'], pal, fs * 0.68, 'left', pal.danger);
 }
 
 function drawGraticule(pal: EPal, fs: number): void {
   const tl = toLL(fromScr(0, 0).x, fromScr(0, 0).y), br = toLL(fromScr(W, H).x, fromScr(W, H).y);
-  const spanMin = (tl.lat - br.lat) * 60, step = spanMin > 40 ? 10 : spanMin > 16 ? 5 : spanMin > 6 ? 2 : spanMin > 2.5 ? 1 : 0.5;
+  const spanMin = (tl.lat - br.lat) * 60, step = spanMin > 40 ? 10 : spanMin > 16 ? 5 : spanMin > 6 ? 2 : spanMin > 2.5 ? 1 : spanMin > 1 ? 0.5 : 0.2;
   ctx.strokeStyle = pal.grid; ctx.lineWidth = 1; ctx.fillStyle = pal.dim;
   ctx.font = `${fs * 0.8}px ui-monospace,Menlo,monospace`;
   const lat0 = Math.ceil((br.lat * 60) / step) * step, lon0 = Math.ceil((tl.lon * 60) / step) * step;
@@ -447,7 +493,8 @@ function drawTargets(pal: EPal, fs: number): void {
     const tr = S.tracks.find((k) => k.tid === t.id), danger = !!tr && tr.danger && assoc.has(t.id);
     const active = r < 6 || assoc.has(t.id) || (picked?.kind === 'ais' && picked.id === t.id);
     ctx.strokeStyle = danger ? pal.danger : pal.ais; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = danger ? 2.2 : 1.3;
-    aisTri(q, rep.hdg, active ? 11 : 8, false);
+    if ((t.L / 1852) * kpx() > 16) { hullPath(p.x, p.y, rep.hdg, t.L, 0.16); ctx.stroke(); } // grande échelle : contour réel (position AIS au milieu)
+    else aisTri(q, rep.hdg, active ? 11 : 8, false);
     if (lost) { line([q[0] - 9, q[1] - 9], [q[0] + 9, q[1] + 9]); line([q[0] - 9, q[1] + 9], [q[0] + 9, q[1] - 9]); continue; }
     if (active) {
       const v = vec(rep.cog, rep.sog * vm), e = toScr(p.x + v.x, p.y + v.y); line(q, e);
@@ -458,17 +505,53 @@ function drawTargets(pal: EPal, fs: number): void {
   }
 }
 
+/** Contour de coque à l'échelle (longueur L en m, largeur ≈ 0,17 L). */
+function hullPath(x: number, y: number, hdg: number, Lm: number, beam = 0.17): void {
+  const L = Lm / 1852, B = L * beam;
+  const pts = [[0, L / 2], [B / 2, L / 4], [B / 2, -L / 2], [-B / 2, -L / 2], [-B / 2, L / 4]].map(([a, b]) => {
+    const f = vec(hdg, b), s = vec(hdg + 90, a); return toScr(x + f.x + s.x, y + f.y + s.y);
+  });
+  ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
+}
+
+/**
+ * Prédicteur : trajectoire du porteur si les ordres restent inchangés (modèle de la simulation), silhouettes à
+ * intervalles réguliers et position finale étiquetée.
+ */
+function drawPredictor(pal: EPal, k: number): void {
+  const E = S.ecdis, o = S.own;
+  if (E.pred <= 0) return;
+  const P = predicted(E.pred);
+  if (P.length < 2) return;
+  const Ln = (o.L / 1852) * k, every = E.pred <= 60 ? 15 : E.pred <= 180 ? 30 : 60;
+  ctx.strokeStyle = pal.own; ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]); ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  P.forEach((p, i) => { const q = toScr(p.x, p.y); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+  ctx.stroke(); ctx.setLineDash([]);
+  for (const p of P) {
+    if (p.t === 0 || (Math.round(p.t) % every !== 0 && p !== P[P.length - 1])) continue;
+    const last = p === P[P.length - 1];
+    ctx.globalAlpha = last ? 0.9 : 0.5;
+    if (Ln > 10) { hullPath(p.x, p.y, p.hdg, o.L); ctx.lineWidth = last ? 1.6 : 1; ctx.stroke(); }
+    else { const q = toScr(p.x, p.y), h = vec(p.hdg, 7); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(q[0], q[1], 2.5, 0, 7); ctx.stroke(); line(q, [q[0] + h.x, q[1] - h.y]); }
+    if (last) {
+      const q = toScr(p.x, p.y);
+      ctx.globalAlpha = 1; ctx.fillStyle = pal.own; ctx.font = '600 11px ui-monospace,Menlo,monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${E.pred >= 60 ? E.pred / 60 + ' min' : E.pred + ' s'} · ${p3(p.hdg)}° · ${p.stw.toFixed(1)} kn`, q[0] + Math.max(10, Ln * 0.3), q[1]);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawOwn(pal: EPal, k: number): void {
   const o = S.own, q = toScr(o.x, o.y), Ln = (o.L / 1852) * k;
+  drawPredictor(pal, k);
   ctx.strokeStyle = pal.own; ctx.lineWidth = 1.6;
   // ligne de foi jusqu'au bord
   const hv = vec(o.hdg, view.range * 4); line(q, toScr(o.x + hv.x, o.y + hv.y));
   if (Ln > 14) {
-    const L = o.L / 1852, B = L * 0.17;
-    const pts = [[0, L / 2], [B / 2, L / 4], [B / 2, -L / 2], [-B / 2, -L / 2], [-B / 2, L / 4]].map(([a, b]) => {
-      const f = vec(o.hdg, b), s = vec(o.hdg + 90, a); return toScr(o.x + f.x + s.x, o.y + f.y + s.y);
-    });
-    ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.stroke();
+    hullPath(o.x, o.y, o.hdg, o.L); ctx.stroke();
   } else {
     ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 7); ctx.stroke();
     ctx.beginPath(); ctx.arc(q[0], q[1], 8, 0, 7); ctx.stroke();
@@ -513,7 +596,7 @@ function drawHud(pal: EPal, fs: number): void {
     'ECDIS — NORD EN HAUT, MOUV. VRAI',
     CHART.name,
     `Échelle ${view.range} NM · contour de sécurité ${E.safety} m`,
-    `Anticipation ${E.look} min${view.follow ? '' : ' · CARTE DÉPLACÉE'}`,
+    `Anticipation ${E.look} min · prédicteur ${E.pred > 0 ? (E.pred >= 60 ? E.pred / 60 + ' min' : E.pred + ' s') : 'arrêté'}${view.follow ? '' : ' · CARTE DÉPLACÉE'}`,
   ], pal, fs * 0.92, 'left', pal.text);
   box(W - 6, 6, [
     `${fmtLat(ll.lat)}  ${fmtLon(ll.lon)}`,

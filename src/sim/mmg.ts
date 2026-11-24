@@ -11,7 +11,10 @@
  * Extensions hors méthode standard (approximations documentées) :
  *  - hélice en marche arrière (n < 0) : poussée ≈ -0,7·ρ·n²·D⁴·k0, sans effet de souffle sur le safran ;
  *  - efforts de vent : coefficients simplifiés CX = -0,7·cos γ, CY = -0,85·sin γ (γ = angle du vent apparent) ;
- *  - aux faibles vitesses, les grandeurs adimensionnelles utilisent U ≥ 0,5 m/s.
+ *  - aux faibles vitesses, les grandeurs adimensionnelles utilisent U ≥ 0,5 m/s ;
+ *  - propulseur d'étrave : effort transversal T appliqué en xT, efficacité réduite avec la vitesse
+ *    f(U) = 1 / (1 + U²) (U en m/s : ≈ 50 % à 2 kn, ≈ 20 % à 4 kn), approximation de la perte d'efficacité
+ *    des propulseurs en tunnel en marche avant, sans interaction avec la carène ni l'hélice.
  */
 
 export interface MMGParams {
@@ -42,6 +45,8 @@ export interface MMGInput {
   n: number;
   /** vent apparent dans le repère navire : vitesse (m/s) et angle d'où il vient (rad, 0 = de l'avant, > 0 = de tribord) */
   windSpeed: number; windAngle: number;
+  /** Propulseur d'étrave : poussée transversale (N, > 0 = étrave poussée sur tribord) et position (m sur l'avant du milieu). */
+  thrust?: number; xT?: number;
 }
 
 const RHO_AIR = 1.225;
@@ -104,7 +109,14 @@ export function mmgForces(p: MMGParams, s: MMGState, inp: MMGInput): { X: number
   const XW = qa * p.AF * -0.7 * Math.cos(inp.windAngle);
   const YW = qa * p.AL * -0.85 * Math.sin(inp.windAngle);
 
-  return { X: XH + XP + XR + XW, Y: YH + YR + YW, N: NH + NR };
+  // --- propulseur d'étrave (simplifié)
+  let YT = 0, NT = 0;
+  if (inp.thrust) {
+    YT = inp.thrust / (1 + Ureal * Ureal);
+    NT = YT * (inp.xT ?? 0);
+  }
+
+  return { X: XH + XP + XR + XW, Y: YH + YR + YW + YT, N: NH + NR + NT };
 }
 
 /** Masses et inerties dimensionnelles. */

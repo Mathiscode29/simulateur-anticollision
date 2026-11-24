@@ -9,7 +9,7 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 | § MSC.192(79) | Exigence (résumé) | État | Mise en œuvre / écart |
 |---|---|---|---|
 | 5.1.2 | Bandes X et S, bande indiquée | 🟡 | Sélection X / S, indiquée en permanence. Différences modélisées : ouverture du faisceau, sensibilité au clutter et à la pluie. Pas de radars X et S simultanés. |
-| 5.3.2 | Gain, anti-clutter mer (manuel et automatique), anti-clutter pluie ; état affiché en permanence | ✅ | Trois réglages, mer en auto ou manuel, niveaux affichés sur le scope. |
+| 5.3.2 | Gain, anti-clutter mer (manuel et automatique), anti-clutter pluie ; état affiché en permanence | ✅ | Trois réglages, mer en auto ou manuel, niveaux affichés sur le scope. Depuis la V1.9, les inscriptions du scope (orientation, mouvement, vecteurs, stabilisation, sillages, limites CPA / TCPA, AIS, bande, mer auto) se règlent d'un clic, comme sur les consoles réelles. |
 | 5.10.1-2 | Échelles 0,25 / 0,5 / 0,75 / 1,5 / 3 / 6 / 12 / 24 NM, échelle affichée | ✅ | Molette ou touches + / −. |
 | 5.11.1 | Anneaux fixes équidistants, intervalle affiché | ✅ | |
 | 5.12.1 | Au moins deux VRM avec lecture numérique | ✅ | VRM 1 et 2 (clic ou touches 1 / 2). |
@@ -62,8 +62,10 @@ Le simulateur reste un **outil d'entraînement complémentaire, non agréé STCW
 | Fonction | État | Remarque |
 |---|---|---|
 | Position du porteur en latitude / longitude WGS 84 | ✅ | Panneau de navigation, radar (curseur) et ECDIS. |
-| Contour de sécurité choisi par l'utilisateur, mis en valeur | ✅ | 10, 20 ou 30 m ; zones de profondeur colorées par rapport à ce contour. |
+| Contour de sécurité choisi par l'utilisateur, mis en valeur | ✅ | 10, 15, 20 ou 30 m ; zones de profondeur colorées par rapport à ce contour. |
 | Alarme de franchissement du contour de sécurité dans un délai réglable | ✅ | 3, 6 ou 12 min sur le vecteur route fond, bande latérale de ± 0,1 NM ; alarme sonore. |
 | Indication d'entrée dans une zone particulière (DST) | ✅ | Alerte « attention » à l'entrée dans une voie ou dans une zone de prudence ; R10 suivie en continu. Zones de prudence (tirets, « ! »), mouillages et phares (étoile, caractère, portée) affichés. |
 | Planification et vérification de route | 🟡 | Tracé à la souris, contrôle des segments par rapport au contour de sécurité ; pas de couloir de route paramétrable par segment. |
+| Prédicteur de position (aide à la manœuvre, hors exigences MSC.232(82)) | ✅ | Trajectoire à 30 s … 6 min calculée avec le modèle du porteur et les ordres en cours (barre ou pilote, machine, propulseur d'étrave), silhouettes à l'échelle ; ECDIS incrusté dans la vue visuelle avec zoom automatique en manœuvre (0,25 NM sous 2,5 kn). |
+| Échelles de port | ✅ | 0,25 et 0,5 NM ; navires AIS dessinés à l'échelle (contour) dès qu'ils dépassent 16 px. |
 | Présentation S-52 | 🟡 | Couleurs et symboles inspirés de S-52 (jour, crépuscule, nuit), carte schématique : pas de cellule S-57/S-101. |

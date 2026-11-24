@@ -7,6 +7,17 @@ La **version initiale** (état du 23 novembre 2026, avant les mises à jour V1.x
 - dans la branche `version-initiale` de ce dépôt ;
 - dans un dépôt de sauvegarde séparé, `simulateur-anticollision-version-initiale`.
 
+## V1.9 — 24 novembre 2026
+Ergonomie, manœuvre depuis la vue visuelle et prédicteur ECDIS.
+- **Moins de boutons à l'écran** : le panneau de droite passe de six onglets à quatre (Conduite, Radar avec la liste des cibles, ECDIS, Journal). Les réglages qu'on fixe une fois (présentation radar, limites CPA / TCPA, zone d'acquisition, contour de sécurité, couches ECDIS, palette, son) sont dans un volet **⚙ Réglages** qui laisse l'écran visible.
+- **Inscriptions du scope cliquables**, comme sur les consoles réelles : un clic sur NORTH UP, RM, VECT VRAIS, 6 min, STAB, SILLAGES, CPA, TCPA, AIS, BANDE ou MER passe à l'option suivante.
+- **Fenêtre Exercices** à l'ouverture : les sept niveaux en cartes, description, environnement en « Options avancées », exercice en cours et bouton « Terminer et évaluer ». Le **Bilan** s'ouvre de lui-même à la fin ; le bouton de vue Débrief n'apparaît qu'à ce moment, avec un onglet de commandes dédié.
+- En-tête allégé : palette en un seul bouton (jour, crépuscule, nuit), « Radar + ECDIS » regroupé avec « Passerelle » (second clic pour changer de disposition), aide clavier sur la touche **?**, Échap pour fermer.
+- **Manœuvre depuis la vue visuelle** : barre manuelle, transmetteur d'ordres et propulseur d'étrave dans une console superposée à la vue (repliable, bouton « Commandes »). Flèches ← → : barre ±5° en barre manuelle (cap ordonné en pilote auto) ; W / C : propulseur d'étrave.
+- **Propulseur d'étrave** du porteur, simplifié : poussée transversale à l'avant, montée en 8 s, efficacité qui chute avec la vitesse (≈ 50 % à 2 kn, ≈ 20 % à 4 kn). Puissance du KVLCC2 estimée (2 000 kW) : le navire de référence n'en a pas.
+- **Prédicteur ECDIS** (30 s à 6 min, 2 min par défaut) : trajectoire que suivrait le navire si l'on ne touchait plus aux commandes, calculée avec le même modèle que la simulation (barre ou pilote, machine, propulseur, vent et courant), silhouettes à l'échelle et cap / vitesse prévus en bout de prédiction.
+- **ECDIS incrusté** dans la vue visuelle, centré sur le navire, avec zoom automatique selon la vitesse (0,25 NM sous 2,5 kn, 0,5 NM sous 5 kn…) ; un clic change l'échelle. Nouvelles échelles de port 0,25 et 0,5 NM ; navires AIS dessinés à l'échelle quand ils sont assez grands.
+
 ## V1.8 — 24 novembre 2026
 Deux nouvelles zones : Le Havre (port) et Ouessant.
 - **Le Havre** : chenal d'accès depuis la bouée LHA jusqu'aux musoirs des digues Nord et Sud, avant-port, bassin Théophile-Ducrocq, accès et bassin de Port 2000 (4,2 km de quai), Antifer au nord. Feux de la NGA (Pub. 114), cap de la Hève, alignement du quai d'escale, bouées latérales schématiques du chenal, zone d'attente indicative.

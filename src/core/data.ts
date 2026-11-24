@@ -8,7 +8,10 @@ import { KVLCC2 } from './ships/kvlcc2';
  */
 export const SHIPS: Record<string, ShipModel> = {
   vlcc: { n: 'Pétrolier VLCC 320 m (KVLCC2)', L: 320, max: 15.5, mmg: KVLCC2,
-    src: 'MMG standard method, Yasukawa & Yoshimura (2015), coefficients KVLCC2' },
+    src: 'MMG standard method, Yasukawa & Yoshimura (2015), coefficients KVLCC2',
+    // Propulseur d'étrave ESTIMÉ : le KVLCC2 de référence n'en a pas (navire numérique de recherche) ; valeur d'entraînement
+    // fondée sur l'ordre de grandeur courant des propulseurs en tunnel (≈ 0,12 kN de poussée au point fixe par kW).
+    thruster: { kW: 2000, kN: 240, x: 0.44, note: 'propulseur d\'étrave estimé (absent du KVLCC2 de référence)' } },
 };
 export const DEFAULT_SHIP = 'vlcc';
 

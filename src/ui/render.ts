@@ -37,6 +37,14 @@ let frac = 0;
 export function setSimFrac(f: number): void { frac = clamp(f, 0, DT); }
 /** Fraction (s) du pas de simulation écoulée depuis le dernier pas, pour interpoler l'affichage. */
 export const simFrac = (): number => frac;
+/** Inscriptions cliquables du scope : identifiant du réglage et rectangle (pixels CSS), recalculés à chaque image. */
+export type HotKey = 'orient' | 'motion' | 'range' | 'band' | 'sea' | 'vec' | 'vecMin' | 'stab' | 'trail' | 'trailMin' | 'cpa' | 'tcpa' | 'ais';
+const hot: { k: HotKey; x: number; y: number; w: number; h: number }[] = [];
+/** Réglage sous un point du scope (pixels CSS), ou null. */
+export function hotAt(x: number, y: number): HotKey | null {
+  for (const h of hot) if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h.k;
+  return null;
+}
 /** Position du curseur sur le scope (pixels CSS), null hors du scope. */
 export const cursor: { x: number | null; y: number | null } = { x: null, y: null };
 
@@ -452,21 +460,42 @@ export function draw(): void {
   // cartouches permanents (MSC.192(79) 5.10.2, 5.20.3, 5.22, 5.27.3, 5.3.2.5)
   const lh = fs * 1.25, sea = Math.round(seaLevel() * 100);
   ctx.font = `600 ${fs}px ui-monospace,Menlo,monospace`; ctx.textBaseline = 'top';
-  const TL = [
-    `${R.orient === 'NU' ? 'NORTH UP' : R.orient === 'CU' ? 'COURSE UP' : 'HEAD UP'} ${R.motion}${R.offMode !== 'OFF' && R.motion === 'RM' ? ' DÉCENTRÉ' : ''}`,
-    `${R.range} NM  anneaux ${RINGS[R.range]} NM`,
-    `BANDE ${R.band}  GAIN ${R.gain}`,
-    `MER ${R.seaAuto ? 'AUTO ' : ''}${sea}  PLUIE ${R.rain}`,
+  // inscriptions cliquables : chaque ligne est une suite de segments [texte, réglage associé]
+  type Seg = [string, HotKey | null];
+  const TL: Seg[][] = [
+    [[R.orient === 'NU' ? 'NORTH UP' : R.orient === 'CU' ? 'COURSE UP' : 'HEAD UP', 'orient'], [' ', null], [R.motion, 'motion'], [R.offMode !== 'OFF' && R.motion === 'RM' ? ' DÉCENTRÉ' : '', null]],
+    [[`${R.range} NM  anneaux ${RINGS[R.range]} NM`, null]],
+    [[`BANDE ${R.band}`, 'band'], [`  GAIN ${R.gain}`, null]],
+    [[`MER ${R.seaAuto ? 'AUTO ' : ''}${sea}`, 'sea'], [`  PLUIE ${R.rain}`, null]],
   ];
-  const TR = [
-    `VECT ${R.vec === 'REL' ? 'REL' : 'VRAIS'} ${R.vecMin} min`,
-    `STAB ${R.stab === 'GND' ? 'SOL (GNSS)' : 'EAU (LOCH)'}`,
-    `SILLAGES ${R.trail === 'OFF' ? 'OFF' : (R.trail === 'REL' ? 'REL ' : 'VRAIS ') + R.trailMin + ' min'}`,
-    `CPA ${R.cpaLim} NM  TCPA ${R.tcpaLim} min`,
-    `AIS ${S.ecdis.aisRadar ? 'SUPERPOSÉ' : 'OFF'}`,
+  const TR: Seg[][] = [
+    [[`VECT ${R.vec === 'REL' ? 'REL' : 'VRAIS'}`, 'vec'], [' ', null], [`${R.vecMin} min`, 'vecMin']],
+    [[`STAB ${R.stab === 'GND' ? 'SOL (GNSS)' : 'EAU (LOCH)'}`, 'stab']],
+    R.trail === 'OFF' ? [['SILLAGES OFF', 'trail']] : [[`SILLAGES ${R.trail === 'REL' ? 'REL' : 'VRAIS'}`, 'trail'], [' ', null], [`${R.trailMin} min`, 'trailMin']],
+    [[`CPA ${R.cpaLim} NM`, 'cpa'], ['  ', null], [`TCPA ${R.tcpaLim} min`, 'tcpa']],
+    [[`AIS ${S.ecdis.aisRadar ? 'SUPERPOSÉ' : 'OFF'}`, 'ais']],
   ];
-  ctx.textAlign = 'left'; TL.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, 6, 5 + i * lh); });
-  ctx.textAlign = 'right'; TR.forEach((s, i) => { ctx.fillStyle = i === 0 ? pal.text : pal.dim; ctx.fillText(s, w - 6, 5 + i * lh); });
+  hot.length = 0;
+  const segLine = (line: Seg[], x: number, y: number, right: boolean, col: string) => {
+    const ws = line.map(([t]) => ctx.measureText(t).width), tot = ws.reduce((a, b) => a + b, 0);
+    let xx = right ? x - tot : x;
+    ctx.textAlign = 'left';
+    line.forEach(([t, k], i) => {
+      ctx.fillStyle = col; ctx.fillText(t, xx, y);
+      if (k && t.trim()) {
+        const h = { k, x: xx - 2, y: y - 1, w: ws[i] + 4, h: fs + 2 };
+        hot.push(h);
+        if (cursor.x !== null && cursor.y !== null && cursor.x >= h.x && cursor.x <= h.x + h.w && cursor.y >= h.y && cursor.y <= h.y + h.h) {
+          ctx.strokeStyle = pal.sym; ctx.lineWidth = 1; ctx.strokeRect(h.x + 0.5, h.y + 0.5, h.w, h.h);
+        } else {
+          ctx.strokeStyle = col; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.moveTo(xx, y + fs + 1); ctx.lineTo(xx + ws[i], y + fs + 1); ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      }
+      xx += ws[i];
+    });
+  };
+  TL.forEach((l, i) => segLine(l, 6, 5 + i * lh, false, i === 0 ? pal.text : pal.dim));
+  TR.forEach((l, i) => segLine(l, w - 6, 5 + i * lh, true, i === 0 ? pal.text : pal.dim));
   ctx.textBaseline = 'bottom';
   const BL: string[] = [];
   for (let i = 0; i < 2; i++) {

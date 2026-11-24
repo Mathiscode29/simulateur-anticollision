@@ -24,7 +24,7 @@ button.red { background: #5a1717; border-color: var(--bd); color: #fff }
 header .seg { flex-wrap: nowrap }
 header .seg button { padding: 4px 7px; font-size: 11.5px }
 #play { min-width: 40px; font-size: 14px; padding: 3px 8px }
-main { flex: 1; display: flex; flex-direction: column; min-height: 0 }
+main { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative }
 #left { flex: none; display: flex; justify-content: center; background: var(--rbg) }
 #radarWrap { position: relative; width: min(100vw, 56vh); width: min(100vw, 56dvh); aspect-ratio: 1/1 }
 #ecdisWrap { position: relative; width: 100vw; height: 56vh; height: 56dvh; display: none }
@@ -157,7 +157,84 @@ details { margin: 8px 0 } summary { cursor: pointer; color: var(--ac); font-weig
   body.view-bridge #radarWrap { width: auto; height: auto; aspect-ratio: auto }
   body.view-bridge #ecdisWrap { width: auto; height: auto; border-left: 1px solid var(--ln) }
 }
-@media (max-width: 520px) { .bt, .stcw, header [data-seg=palette] { display: none } }
+@media (max-width: 520px) { .bt, .stcw { display: none } }
+
+/* En-tête : exercice, bilan, palette, réglages */
+#exoBtn, #bilanBtn, #palBtn, #setBtn, header [data-act=ovHelp] { padding: 4px 8px; font-size: 12px; white-space: nowrap }
+#exoBtn { max-width: 260px; overflow: hidden; text-overflow: ellipsis }
+#setBtn, header [data-act=ovHelp] { min-width: 30px; font-size: 14px; padding: 2px 7px }
+#palBtn { min-width: 88px }
+#bilanBtn, #dbViewBtn, #dbTab { display: none }
+body.has-report #bilanBtn, body.has-report #dbViewBtn { display: inline-block }
+body.view-debrief #tabs button { display: none }
+body.view-debrief #tabs #dbTab { display: block }
+body.set-open #setBtn { background: var(--on); border-color: var(--ac) }
+.hint { color: var(--dm); margin: 2px 0 6px; padding: 5px 8px; border-left: 2px solid var(--ac); background: var(--pn2); border-radius: 0 6px 6px 0 }
+
+/* Volet des réglages : par-dessus le panneau de droite, l'écran reste visible */
+#settings { display: none; position: absolute; top: 0; right: 0; bottom: 0; width: 100%; z-index: 30; background: var(--pn); border-left: 1px solid var(--ln); overflow: auto; padding: 0 10px 30px; box-shadow: -8px 0 24px rgba(0,0,0,.35) }
+body.set-open #settings { display: block }
+@media (min-width: 1000px) { #settings { width: 480px } }
+#settings details { border-bottom: 1px solid var(--ln); padding: 2px 0 6px; margin: 0 }
+#settings summary { padding: 8px 0 4px; text-transform: uppercase; font-size: 11.5px; letter-spacing: .06em }
+.ovHead { display: flex; align-items: center; gap: 8px; padding: 9px 0 7px; position: sticky; top: 0; background: inherit; z-index: 1; border-bottom: 1px solid var(--ln) }
+.ovHead b { font-size: 14px }
+.ovHead button { padding: 2px 9px }
+
+/* Fenêtres : exercices, bilan, aide */
+.ov { display: none; position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); align-items: center; justify-content: center; padding: 16px }
+.ov.on { display: flex }
+.ovBox { background: var(--pn); border: 1px solid var(--ln); border-radius: 10px; width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; padding: 0 14px 12px; box-shadow: 0 16px 48px rgba(0,0,0,.5) }
+.ovBox.wide { width: min(1180px, 100%); height: min(860px, 100%) }
+.ovScroll { overflow: auto; padding-top: 6px }
+.exoBody { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; min-height: 0; flex: 1; padding-top: 10px }
+.exoList { overflow: auto; min-height: 0; padding-right: 4px }
+.exoSide { overflow: auto; min-height: 0; border-left: 1px solid var(--ln); padding-left: 14px }
+.exoSide h3 { margin: 2px 0 6px; font-size: 16px; color: var(--ac) }
+.exoSide #scDesc { margin: 0 0 6px; font-size: 13px }
+.lvgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px }
+.lvcard { background: var(--pn2); border: 1px solid var(--ln); border-radius: 8px; padding: 8px }
+.lvcard .lvt { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ac); font-weight: 700; margin-bottom: 2px }
+.lvcard .lvn { font-size: 10.5px; color: var(--dm); margin-bottom: 6px }
+.lvcard button { display: block; width: 100%; text-align: left; margin: 3px 0; padding: 6px 8px; font-size: 12px; line-height: 1.25; background: var(--pn) }
+.lvcard button.on { background: var(--on) }
+button.launch { width: 100%; padding: 10px; font-size: 15px; margin: 6px 0 4px }
+#curRun:empty { display: none }
+#curRun .row { margin: 6px 0 0 }
+@media (max-width: 860px) { .exoBody { grid-template-columns: 1fr; overflow: auto } .exoSide { border-left: 0; padding-left: 0 } .exoList { overflow: visible } }
+
+/* Vue visuelle : commandes de manœuvre et ECDIS incrusté */
+#mano, #miniWrap { display: none }
+body.view-visual.mano-on #mano { display: flex }
+body.view-visual.mini-on #miniWrap { display: block }
+#miniWrap { position: absolute; right: 8px; top: 78px; width: clamp(220px, 24vw, 340px); height: clamp(170px, 30vh, 270px); border: 1px solid rgba(200,220,235,.35); border-radius: 6px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.45); cursor: pointer; background: #000 }
+#miniWrap canvas { position: absolute; inset: 0; cursor: pointer }
+#mano { position: absolute; right: 8px; bottom: calc(var(--insth, 0px) + 8px); gap: 10px; align-items: stretch; background: rgba(8,12,16,.8); color: #dfe9f0; border: 1px solid rgba(200,220,235,.28); border-radius: 8px; padding: 7px 9px; font-size: 11.5px; box-shadow: 0 4px 16px rgba(0,0,0,.45); user-select: none }
+#mano button { background: rgba(28,36,44,.95); color: #e6eef3; border-color: rgba(200,220,235,.25); padding: 2px 6px; font-size: 11.5px; border-radius: 4px }
+#mano button.on { background: #1f6f9a; border-color: #5fb6e0 }
+.mcol { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.mh { font-size: 10px; letter-spacing: .08em; color: #8fb5cc; font-weight: 700 }
+.mtag { color: #ffcf33; font-weight: 600; letter-spacing: 0 }
+.mro { font: 11px ui-monospace, Menlo, monospace; color: #ffd21f; min-height: 14px }
+#mTele { display: flex; flex-direction: column; gap: 2px }
+#mTele button { text-align: left; width: 100px; padding: 1px 6px; font-size: 11px }
+#mTele button.ast { color: #ff9b9b }
+#mTele button.fw { color: #9be8b1 }
+.mrud { width: 250px }
+.mbig { display: flex; align-items: baseline; gap: 8px }
+.mbig b { font: 700 22px ui-monospace, Menlo, monospace }
+.mbig span { color: #ffd21f; font: 11px ui-monospace, Menlo, monospace }
+.mrow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px }
+button.p { color: #ff8c8c } button.s { color: #7ee59a }
+#mano button.p { color: #ff8c8c } #mano button.s { color: #7ee59a }
+#mRudSl { accent-color: #ffcf33 }
+.mthr { width: 170px }
+.thrseg { flex-wrap: nowrap }
+.thrseg button { min-width: 30px }
+.tbar { position: relative; height: 12px; background: #0d1216; border: 1px solid rgba(200,220,235,.3); border-radius: 3px; margin-top: 2px }
+.tbar i { position: absolute; top: 1px; bottom: 1px; background: #ffd21f; border-radius: 2px }
+.tbar b { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #dfe9f0 }
+body.pal-night #mano { filter: brightness(.6) }
 @media (max-width: 1200px) { header [data-seg=view] button { padding: 4px 5px } .bt { display: none } }
 
 /* indicateur d'angle de barre (onglet Barre) */

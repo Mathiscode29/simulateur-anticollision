@@ -18,6 +18,8 @@ export interface ShipModel {
   mmg: MMGParams;
   /** Source des données, affichée dans l'interface. */
   src: string;
+  /** Propulseur d'étrave : puissance (kW), poussée au point fixe (kN), position (fraction de L sur l'avant du milieu). */
+  thruster?: { kW: number; kN: number; x: number; note: string };
 }
 
 export interface OwnShip {
@@ -29,6 +31,8 @@ export interface OwnShip {
   rudCmd?: number;
   /** Tirant d'eau d'exercice (m) : navire allégé pour un exercice portuaire ; défaut : celui du modèle MMG. */
   draft?: number;
+  /** Propulseur d'étrave : ordre (−1 = pleine poussée étrave sur bâbord, +1 = sur tribord) et poussée réelle (même échelle). */
+  thr?: number; thrAct?: number;
 }
 
 /** Tirant d'eau effectif du porteur (m). */
@@ -117,6 +121,8 @@ export interface EcdisSettings {
   layers: { tss: boolean; depth: boolean; names: boolean; ais: boolean; arpa: boolean };
   /** Symboles AIS superposés au radar. */
   aisRadar: boolean;
+  /** Prédicteur de position (s) : intégration du modèle du porteur avec les ordres en cours ; 0 = arrêt. */
+  pred: number;
   routeIssues: { leg: number; x: number; y: number; depth: number }[];
 }
 
@@ -260,7 +266,7 @@ export const S: State = {
   chart: 'open', coast: null, markEcho: {}, ownTrack: [], tss: newTssWatch(), grounded: false, navAlerts: [], rec: null, snd: newSoundState(),
   ecdis: {
     safety: 30, look: 6, ebl: null, vrm: null, tool: 'INFO',
-    layers: { tss: true, depth: true, names: true, ais: true, arpa: true }, aisRadar: true, routeIssues: [],
+    layers: { tss: true, depth: true, names: true, ais: true, arpa: true }, aisRadar: true, routeIssues: [], pred: 120,
   },
 };
 

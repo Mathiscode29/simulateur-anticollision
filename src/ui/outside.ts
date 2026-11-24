@@ -149,12 +149,16 @@ let lastDraw = 0, drawMs = 0;
 let TV = 0;
 const vecM = (b: number, v: number) => ({ x: v * Math.sin(b * D2R), y: v * Math.cos(b * D2R) });
 
+let instH = -1;
 export function drawOutside(): void {
   if (!W || !H) return;
   const now = performance.now();
   // pleine cadence tant que le rendu est léger ; 30 i/s seulement si l'ordinateur peine (rendu > 12 ms)
   if (drawMs > 12 && now - lastDraw < 31) return;
   lastDraw = now;
+  // hauteur de la console d'instruments, pour placer les commandes de manœuvre juste au-dessus
+  const ih = look.inst && !look.binoc ? Math.round(clamp(H * 0.2, 74, 140)) : 0;
+  if (ih !== instH) { instH = ih; cv.parentElement?.style.setProperty('--insth', ih + 'px'); }
   const fr = S.paused || S.over ? 0 : simFrac();
   TV = S.t + fr;
   const O = S.own, o = { ...O, x: O.x + O.vx * K2N * fr, y: O.y + O.vy * K2N * fr, hdg: n360(O.hdg + O.rot * fr) }, sk = sky(), hf = fov();

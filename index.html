@@ -14,15 +14,34 @@
   <span id="clock">T+00:00</span>
   <button id="play" data-act="play" title="Lecture / pause (Espace)">▶</button>
   <div class="seg" data-seg="ts" title="Accélération du temps"><button data-v="1">×1</button><button data-v="2">×2</button><button data-v="4">×4</button><button data-v="8">×8</button><button data-v="16">×16</button></div>
+  <button id="exoBtn" data-act="ovExo" title="Choisir, lancer ou terminer un exercice">☰ <span id="exoName">Exercices</span></button>
+  <button id="bilanBtn" data-act="ovBilan" title="Bilan de l'exercice terminé">Bilan</button>
   <span class="sp"></span>
-  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="split">Radar + ECDIS</button><button data-v="visual">Visuel</button><button data-v="bridge" title="Triangle du chef de quart : visuel en haut, radar en bas à gauche, ECDIS en bas à droite">Passerelle</button><button data-v="debrief" title="Rejeu de l'exercice terminé">Débrief</button></div>
-  <div class="seg" data-seg="palette" title="Palette d'affichage"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div>
+  <div class="seg" data-seg="view" title="Vue (touche V) : la simulation continue pendant le changement"><button data-v="radar">Radar</button><button data-v="ecdis">ECDIS</button><button data-v="visual">Visuel</button><button data-v="bridge" title="Passerelle : visuel, radar et ECDIS (cliquer à nouveau : radar + ECDIS côte à côte)">Passerelle</button><button data-v="debrief" id="dbViewBtn" title="Rejeu de l'exercice terminé">Débrief</button></div>
+  <button id="palBtn" data-act="pal" title="Palette d'affichage : cliquer pour passer de jour à crépuscule puis nuit">Crépuscule</button>
+  <button id="setBtn" data-act="settings" title="Réglages (présentation radar, alertes, ECDIS, affichage, son)">⚙</button>
+  <button data-act="ovHelp" title="Commandes au clavier et à la souris (?)">?</button>
   <span class="stcw" title="Outil d'entraînement complémentaire, non agréé au titre de la convention STCW">Non agréé STCW</span>
 </header>
 <main>
 <div id="left">
   <div id="visualWrap"><canvas id="outside"></canvas>
-    <div class="vbar"><button data-act="look" data-v="-10" title="Regard à gauche (Q)">◀</button><button data-act="lookFwd" title="Regard sur l'avant (Z)">Avant</button><button data-act="look" data-v="10" title="Regard à droite (D)">▶</button><button data-act="lookAft" title="Regard sur l'arrière depuis l'aileron (X)">Arrière</button><button data-act="binoc" title="Jumelles 7× (B ou molette)">Jumelles</button><button data-act="inst" title="Console d'instruments (I)">Instruments</button></div>
+    <div class="vbar"><button data-act="look" data-v="-10" title="Regard à gauche (Q)">◀</button><button data-act="lookFwd" title="Regard sur l'avant (Z)">Avant</button><button data-act="look" data-v="10" title="Regard à droite (D)">▶</button><button data-act="lookAft" title="Regard sur l'arrière depuis l'aileron (X)">Arrière</button><button data-act="binoc" title="Jumelles 7× (B ou molette)">Jumelles</button><button data-act="inst" title="Console d'instruments (I)">Instruments</button><button data-act="manoT" title="Commandes de manœuvre : barre, machine, propulseur d'étrave">Commandes</button><button data-act="miniT" title="ECDIS en incrustation, zoom automatique en manœuvre">ECDIS</button></div>
+    <div id="miniWrap" title="ECDIS en incrustation : cliquer pour changer l'échelle (AUTO = zoom selon la vitesse)"><canvas id="miniEc"></canvas></div>
+    <div id="mano">
+      <div class="mcol mtele"><div class="mh">MACHINE</div><div id="mTele"></div><div class="mro" id="mTeleTxt"></div></div>
+      <div class="mcol mrud"><div class="mh">BARRE <span id="mHelm" class="mtag"></span></div>
+        <div class="mbig"><b id="mRudTxt">0</b><span id="mRudAct"></span></div>
+        <input type="range" id="mRudSl" min="-35" max="35" step="1" value="0" title="Barre manuelle (← → : ±5°)">
+        <div class="mrow"><button data-act="rud" data-v="-35" class="p">35</button><button data-act="rud" data-v="-20" class="p">20</button><button data-act="rud" data-v="-10" class="p">10</button><button data-act="rud" data-v="0">0</button><button data-act="rud" data-v="10" class="s">10</button><button data-act="rud" data-v="20" class="s">20</button><button data-act="rud" data-v="35" class="s">35</button></div>
+        <div class="mro" id="mRotTxt"></div>
+      </div>
+      <div class="mcol mthr"><div class="mh">PROPULSEUR D'ÉTRAVE</div>
+        <div class="seg thrseg" data-seg="thr" title="Propulseur d'étrave : sens de la poussée sur l'étrave"><button data-v="-1" title="Étrave sur bâbord, pleine poussée (W)">◀◀</button><button data-v="-0.5" title="Étrave sur bâbord, demi-poussée">◀</button><button data-v="0" title="Arrêt">0</button><button data-v="0.5" title="Étrave sur tribord, demi-poussée">▶</button><button data-v="1" title="Étrave sur tribord, pleine poussée (C)">▶▶</button></div>
+        <div class="tbar"><i id="mThrFill"></i><b></b></div>
+        <div class="mro" id="mThrTxt"></div>
+      </div>
+    </div>
   </div>
   <div id="radarWrap"><canvas id="radar"></canvas></div>
   <div id="ecdisWrap"><canvas id="ecdis"></canvas></div>
@@ -56,15 +75,14 @@
     <div id="alerts"></div>
   </section>
   <div id="tabs">
-    <button data-tab="barre" class="on">Barre</button>
+    <button data-tab="conduite" class="on">Conduite</button>
     <button data-tab="radar">Radar</button>
-    <button data-tab="arpa">Cibles</button>
     <button data-tab="ecdis">ECDIS</button>
-    <button data-tab="exo">Exercice</button>
-    <button data-tab="bilan">Bilan</button>
+    <button data-tab="journal">Journal</button>
+    <button data-tab="debrief" id="dbTab">Débrief</button>
   </div>
 
-  <section class="tab on" id="t-barre">
+  <section class="tab on" id="t-conduite">
     <div class="modeHead"><div class="seg" data-seg="ap"><button data-v="1">Pilote auto</button><button data-v="0">Barre manuelle</button></div></div>
     <div class="dials"><canvas id="rudInd" title="Angle de barre : aiguille = angle réel, repère blanc = ordre"></canvas><canvas id="rotInd" title="Taux de giration (ROT), °/min"></canvas></div>
     <div id="apBox">
@@ -78,10 +96,12 @@
     <div id="manBox" style="display:none">
       <div class="row big">Barre <b id="rudTxt">0</b></div>
       <input type="range" id="rudSl" min="-35" max="35" step="1" value="0">
-      <div class="grid7" style="margin-top:6px">
-        <button data-act="rud" data-v="-35">Bd 35</button><button data-act="rud" data-v="-20">Bd 20</button><button data-act="rud" data-v="-10">Bd 10</button><button data-act="rud" data-v="0">Zéro</button><button data-act="rud" data-v="10">Td 10</button><button data-act="rud" data-v="20">Td 20</button><button data-act="rud" data-v="35">Td 35</button>
-      </div>
+      <div class="grid7 rudBtns" style="margin-top:6px"><button data-act="rud" data-v="-35" class="p">35</button><button data-act="rud" data-v="-20" class="p">20</button><button data-act="rud" data-v="-10" class="p">10</button><button data-act="rud" data-v="0">0</button><button data-act="rud" data-v="10" class="s">10</button><button data-act="rud" data-v="20" class="s">20</button><button data-act="rud" data-v="35" class="s">35</button></div>
     </div>
+    <h4>Propulseur d'étrave</h4>
+    <div class="row"><div class="seg thrseg" data-seg="thr" title="Propulseur d'étrave : sens de la poussée sur l'étrave"><button data-v="-1" title="Étrave sur bâbord, pleine poussée (W)">◀◀</button><button data-v="-0.5" title="Étrave sur bâbord, demi-poussée">◀</button><button data-v="0" title="Arrêt">0</button><button data-v="0.5" title="Étrave sur tribord, demi-poussée">▶</button><button data-v="1" title="Étrave sur tribord, pleine poussée (C)">▶▶</button></div><span id="thrTxt" class="mono small"></span></div>
+    <h4>Transmetteur d'ordres</h4>
+    <div class="teleBox"><div class="tele" id="tele"></div><div class="teleCv"><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div></div>
     <h4>Signaux sonores</h4>
     <div class="grid4 horn">
       <button data-act="horn" data-v="C" title="R34a : je viens sur tribord">1 bref · Td</button><button data-act="horn" data-v="CC" title="R34a : je viens sur bâbord">2 brefs · Bd</button><button data-act="horn" data-v="CCC" title="R34a : je bats en arrière">3 brefs · AR</button><button data-act="horn" data-v="CCCCC" title="R34d : doute sur les intentions de l'autre">5 brefs · doute</button>
@@ -89,124 +109,45 @@
     </div>
     <div class="row"><span class="lbl">Brume auto (R35)</span><div class="seg" data-seg="fogAuto" title="Signal de brume automatique : un prolongé (ou deux stoppé) toutes les 110 s"><button data-v="1">Marche</button><button data-v="0">Arrêt</button></div></div>
     <div class="row"><span class="lbl">Sons entendus</span><div class="seg" data-seg="hornOn" title="Jouer les signaux sonores (le vôtre et ceux des navires à portée d'audibilité)"><button data-v="1">Oui</button><button data-v="0">Non</button></div></div>
-    <h4>Transmetteur d'ordres</h4>
-    <div class="teleBox"><div class="tele" id="tele"></div><div class="teleCv"><canvas id="telegraph" title="Transmetteur d'ordres : cliquez ou faites glisser la manette ; l'aiguille jaune répète le régime réel de la machine"></canvas></div></div>
   </section>
 
   <section class="tab" id="t-radar">
     <div class="row"><span class="lbl">Échelle</span><button data-act="rng" data-v="-1" title="Touche −">−</button><b id="rngTxt" class="mono" style="min-width:70px;text-align:center">6 NM</b><button data-act="rng" data-v="1" title="Touche +">+</button></div>
-    <div class="row"><span class="lbl">Mouvement</span><div class="seg" data-seg="motion"><button data-v="RM">Relatif (RM)</button><button data-v="TM">Vrai (TM)</button></div></div>
-    <div class="row"><span class="lbl">Orientation</span><div class="seg" data-seg="orient"><button data-v="NU">North up</button><button data-v="CU">Course up</button><button data-v="HU">Head up</button></div></div>
-    <div class="row"><span class="lbl">Décentrage (RM)</span><div class="seg" data-seg="offMode"><button data-v="OFF">Centré</button><button data-v="FWD">Vue avant 50 %</button><button data-v="CUR">Au curseur (O)</button></div></div>
-    <div class="row"><span class="lbl">Vecteurs</span><div class="seg" data-seg="vec"><button data-v="REL">Relatifs</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="vecMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button><button data-v="20">20'</button></div></div>
-    <div class="row"><span class="lbl">Stabilisation</span><div class="seg" data-seg="stab"><button data-v="GND">Sol (GNSS)</button><button data-v="SEA">Eau (loch)</button></div></div>
-    <div class="row"><span class="lbl">Sillages</span><div class="seg" data-seg="trail"><button data-v="OFF">Off</button><button data-v="REL">Rel.</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="trailMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button></div></div>
-    <div class="row"><span class="lbl">Route prévue</span><div class="seg" data-seg="routeShow"><button data-v="1">Affichée</button><button data-v="0">Masquée</button></div><span class="lbl" style="min-width:0">Couloir</span><div class="seg" data-seg="xteLim"><button data-v="0.5">±0,5</button><button data-v="1">±1</button><button data-v="2">±2 NM</button></div></div>
-    <div class="row"><span class="lbl">AIS sur le radar</span><div class="seg" data-seg="aisRadar"><button data-v="1">Superposé</button><button data-v="0">Masqué</button></div></div>
-    <div class="row"><span class="lbl">Positions passées</span><div class="seg" data-seg="pastMin"><button data-v="0">Off</button><button data-v="0.5">30 s</button><button data-v="1">1 min</button><button data-v="2">2 min</button></div></div>
+    <p class="hint small">Les inscriptions du scope se règlent d'un clic : orientation, mouvement, vecteurs, stabilisation, sillages, limites CPA / TCPA, AIS, bande. Le reste est dans ⚙ Réglages.</p>
     <h4>Vidéo</h4>
-    <div class="row"><span class="lbl">Bande</span><div class="seg" data-seg="band"><button data-v="X">X (3 cm)</button><button data-v="S">S (10 cm)</button></div></div>
     <div class="row"><span class="lbl">Gain</span><input type="range" id="gainSl" min="0" max="100" style="flex:1"><b id="gainTxt" class="mono num"></b></div>
     <div class="row"><span class="lbl">Anti-clutter mer</span><input type="range" id="seaSl" min="0" max="100" style="flex:1"><b id="seaTxt" class="mono num"></b><div class="seg" data-seg="seaAuto"><button data-v="1">Auto</button><button data-v="0">Man.</button></div></div>
     <div class="row"><span class="lbl">Anti-clutter pluie</span><input type="range" id="rainSl" min="0" max="100" style="flex:1"><b id="rainTxt" class="mono num"></b></div>
     <h4>Outils</h4>
     <div class="row"><span class="lbl">Clic sur le scope</span><div class="seg" data-seg="tool"><button data-v="EV1">EBL/VRM 1</button><button data-v="EV2">EBL/VRM 2</button><button data-v="PI">Ligne PI</button><button data-v="NONE">Aucun</button></div></div>
     <div class="row"><span class="lbl">Relèvements EBL</span><div class="seg" data-seg="eblRef"><button data-v="T">Vrais (T)</button><button data-v="R">Relatifs (R)</button></div><button data-act="clrEbl">Effacer EBL/VRM</button><button data-act="clrPi">Effacer PI</button></div>
-    <h4>Alertes de poursuite</h4>
-    <div class="row"><span class="lbl">Limite CPA</span><div class="seg" data-seg="cpaLim"><button data-v="0.5">0,5</button><button data-v="1">1,0</button><button data-v="1.5">1,5</button><button data-v="2">2,0 NM</button></div></div>
-    <div class="row"><span class="lbl">Limite TCPA</span><div class="seg" data-seg="tcpaLim"><button data-v="6">6</button><button data-v="12">12</button><button data-v="20">20 min</button></div></div>
-    <div class="row"><span class="lbl">Zone d'acquisition</span><div class="seg" data-seg="zone"><button data-v="0">Off</button><button data-v="6">6 NM</button><button data-v="12">12 NM</button></div></div>
-  </section>
-
-  <section class="tab" id="t-arpa">
+    <h4>Cibles</h4>
     <div id="arpaTable"></div>
     <div id="selCard"></div>
     <div class="row"><button data-act="dropSel" title="Suppr">Annuler la cible</button><button data-act="dropAll">Annuler toutes</button><span id="capTxt" class="dim small"></span></div>
-    <h4>Manœuvre d'essai</h4>
-    <div class="row"><div class="seg" data-seg="trial"><button data-v="0">Off</button><button data-v="1">On (T)</button></div><span class="dim small">Vecteurs d'essai en orange</span></div>
-    <div class="row"><span class="lbl">Cap d'essai</span><button data-act="trH" data-v="-10">−10</button><button data-act="trH" data-v="-5">−5</button><b id="trHTxt" class="mono" style="min-width:44px;text-align:center">000°</b><button data-act="trH" data-v="5">+5</button><button data-act="trH" data-v="10">+10</button></div>
-    <div class="row"><span class="lbl">Vitesse d'essai</span><button data-act="trS" data-v="-2">−2</button><button data-act="trS" data-v="-1">−1</button><b id="trSTxt" class="mono" style="min-width:44px;text-align:center">0 kn</b><button data-act="trS" data-v="1">+1</button><button data-act="trS" data-v="2">+2</button></div>
-    <div class="row"><span class="lbl">Délai</span><div class="seg" data-seg="trialDelay"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5 min</button></div><span id="trCount" class="mono small"></span></div>
+    <details id="trialBox"><summary>Manœuvre d'essai (T)</summary>
+      <div class="row"><div class="seg" data-seg="trial"><button data-v="0">Off</button><button data-v="1">On (T)</button></div><span class="dim small">Vecteurs d'essai en orange</span></div>
+      <div class="row"><span class="lbl">Cap d'essai</span><button data-act="trH" data-v="-10">−10</button><button data-act="trH" data-v="-5">−5</button><b id="trHTxt" class="mono" style="min-width:44px;text-align:center">000°</b><button data-act="trH" data-v="5">+5</button><button data-act="trH" data-v="10">+10</button></div>
+      <div class="row"><span class="lbl">Vitesse d'essai</span><button data-act="trS" data-v="-2">−2</button><button data-act="trS" data-v="-1">−1</button><b id="trSTxt" class="mono" style="min-width:44px;text-align:center">0 kn</b><button data-act="trS" data-v="1">+1</button><button data-act="trS" data-v="2">+2</button></div>
+      <div class="row"><span class="lbl">Délai</span><div class="seg" data-seg="trialDelay"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5 min</button></div><span id="trCount" class="mono small"></span></div>
+    </details>
   </section>
 
   <section class="tab" id="t-ecdis">
     <div class="row"><span class="lbl">Échelle</span><button data-act="ecZoom" data-v="-1">−</button><b id="ecRng" class="mono" style="min-width:70px;text-align:center">6 NM</b><button data-act="ecZoom" data-v="1">+</button><button data-act="ecCenter">Centrer sur le navire</button></div>
-    <div class="row"><span class="lbl">Contour de sécurité</span><div class="seg" data-seg="ecSafety"><button data-v="10">10 m</button><button data-v="15">15 m</button><button data-v="20">20 m</button><button data-v="30">30 m</button></div><span id="ecDraft" class="dim small"></span></div>
-    <div class="row"><span class="lbl">Anticipation</span><div class="seg" data-seg="ecLook"><button data-v="3">3 min</button><button data-v="6">6 min</button><button data-v="12">12 min</button></div></div>
+    <div class="row"><span class="lbl">Prédicteur</span><div class="seg" data-seg="pred" title="Position future du navire si les ordres (barre ou pilote, machine, propulseur) restent inchangés"><button data-v="0">Off</button><button data-v="30">30 s</button><button data-v="60">1 min</button><button data-v="120">2 min</button><button data-v="180">3 min</button><button data-v="360">6 min</button></div></div>
     <div class="row"><span class="lbl">Clic sur la carte</span><div class="seg" data-seg="ecTool"><button data-v="INFO">Info</button><button data-v="EBL">EBL/VRM</button><button data-v="ROUTE">Tracé de route</button></div></div>
-    <div class="row"><span class="lbl">Couches</span><div class="seg" id="ecLayers"><button data-act="layer" data-v="tss">DST</button><button data-act="layer" data-v="depth">Fonds</button><button data-act="layer" data-v="names">Noms</button><button data-act="layer" data-v="ais">AIS</button><button data-act="layer" data-v="arpa">ARPA</button></div></div>
     <h4>Route</h4>
     <div class="row"><button data-act="routeNew" title="La route repart de la position du navire ; cliquez ensuite sur la carte (outil Tracé de route)">Nouvelle route depuis le navire</button><button data-act="routeUndo">Retirer le dernier WP</button><button data-act="routeCheck">Vérifier la route</button></div>
     <div class="row"><button data-act="ecClr">Effacer EBL/VRM</button></div>
     <p class="dim small" id="ecRouteTxt"></p>
     <h4>Objet sélectionné</h4>
     <div id="ecPick" class="card small"><span class="dim">Outil Info : cliquez sur une cible AIS, une piste radar, une bouée ou le navire.</span></div>
-    <p class="dim small">Carte d'entraînement schématique, non destinée à la navigation. Trait de côte © contributeurs OpenStreetMap (ODbL) ; DST : positions officielles OMI (COLREG.2/Circ.59) ; bancs et isobathes schématiques ; positions de bouées marquées ≈ approchées.</p>
+    <p class="dim small">Contour de sécurité, anticipation et couches : ⚙ Réglages. Carte d'entraînement schématique, non destinée à la navigation. Trait de côte © contributeurs OpenStreetMap (ODbL) ; DST : positions officielles OMI ; bancs et isobathes schématiques ; positions de bouées marquées ≈ approchées.</p>
   </section>
 
-  <section class="tab" id="t-exo">
-    <h4>Scénario</h4>
-    <div class="scgrid" data-seg="scen"></div>
-    <p class="dim small" id="scDesc"></p>
-    <h4>Navire</h4>
-    <p style="margin:4px 0" class="small" id="shipInfo"></p>
-    <h4>Environnement</h4>
-    <div class="row"><span class="lbl">Vent</span><span id="windTxt" style="flex:1"></span></div>
-    <div class="row"><input type="range" id="wDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="wSpd" min="0" max="45" step="1" style="flex:1"></div>
-    <div class="row"><span class="lbl">Courant</span><span id="curTxt" style="flex:1"></span></div>
-    <div class="row"><input type="range" id="cDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="cSpd" min="0" max="40" step="1" style="flex:1"></div>
-    <div class="row"><span class="lbl">Visibilité</span><div class="seg" data-seg="vis"><button data-v="good">Bonne</button><button data-v="poor">Réduite (brume)</button></div></div>
-    <div class="row"><span class="lbl">Grains (pluie)</span><div class="seg" data-seg="rainEnv"><button data-v="0">Non</button><button data-v="1">Oui</button></div></div>
-    <div class="row"><span class="lbl">Moment</span><div class="seg" data-seg="night"><button data-v="0">Jour</button><button data-v="1">Nuit</button></div></div>
-    <div class="row"><span class="lbl">Trafic</span><div class="seg" data-seg="comp"><button data-v="disc">Discipliné</button><button data-v="real">Réaliste</button><button data-v="hostile">Imprévisible</button></div></div>
-    <div class="row"><span class="lbl">Avaries</span><div class="seg" data-seg="faults" title="Avaries de machine ou de barre des autres navires, annoncées par VHF / AIS"><button data-v="off">Aucune</button><button data-v="rare">Rares</button><button data-v="freq">Fréquentes</button></div></div>
-    <div class="row"><button data-act="randWx">Météo aléatoire</button><button class="go" data-act="newRun" style="flex:1">▶ Lancer l'exercice</button></div>
-    <details open><summary>Commandes à la souris et au clavier</summary>
-      <table class="keys">
-        <tr><td>Clic sur un écho</td><td>acquérir / sélectionner la cible</td></tr>
-        <tr><td>Clic ailleurs</td><td>placer l'outil choisi (EBL/VRM 1, 2 ou ligne PI)</td></tr>
-        <tr><td>Molette / + −</td><td>échelle de distance</td></tr>
-        <tr><td>← →</td><td>cap ordonné ±1° (Maj : ±10°)</td></tr>
-        <tr><td>↑ ↓</td><td>transmetteur d'ordres</td></tr>
-        <tr><td>A</td><td>acquérir l'écho sous le curseur</td></tr>
-        <tr><td>Suppr</td><td>annuler la cible sélectionnée</td></tr>
-        <tr><td>1 / 2</td><td>EBL/VRM 1 / 2 au curseur</td></tr>
-        <tr><td>P</td><td>ligne PI au curseur</td></tr>
-        <tr><td>O</td><td>décentrer au curseur (recentrer : O à nouveau)</td></tr>
-        <tr><td>M</td><td>mouvement relatif / vrai</td></tr>
-        <tr><td>N</td><td>orientation (north / course / head up)</td></tr>
-        <tr><td>T</td><td>manœuvre d'essai</td></tr>
-        <tr><td>Entrée</td><td>acquitter les alertes</td></tr>
-        <tr><td>V</td><td>vue radar / ECDIS / radar + ECDIS / visuel / passerelle</td></tr>
-        <tr><td>Q / D, Z, X</td><td>regard à gauche / à droite, sur l'avant, sur l'arrière</td></tr>
-        <tr><td>B, molette (visuel)</td><td>jumelles 7×</td></tr>
-        <tr><td>I</td><td>console d'instruments (vue extérieure)</td></tr>
-        <tr><td>ECDIS : glisser, molette</td><td>déplacer la carte, échelle (C : recentrer)</td></tr>
-        <tr><td>Espace</td><td>lecture / pause</td></tr>
-      </table>
-    </details>
-    <p class="dim small">Limites actuelles : les cibles ne s'évitent pas entre elles ; carte du Pas-de-Calais schématique (bathymétrie modélisée, pas de marée). Outil d'entraînement complémentaire, non agréé STCW.</p>
-  </section>
-
-  <section class="tab" id="t-bilan">
-    <div class="row"><button class="red" data-act="finish">Terminer et évaluer</button><button data-act="newRun">Rejouer un scénario</button></div>
-    <div id="dbBox">
-      <button class="big" data-act="debrief" id="dbOpen" disabled>▶ Revoir l'exercice (débrief)</button>
-      <div id="dbCtl" hidden>
-        <div class="row"><button data-act="dbPrev" title="Moment clé précédent (←)">⏮</button><button data-act="dbPlay" id="dbPlayBtn" title="Lecture / pause (Espace)">▶</button><button data-act="dbNext" title="Moment clé suivant (→)">⏭</button>
-          <input type="range" id="dbSlider" min="0" max="1000" value="0"><b id="dbTime" class="mono">T+00:00</b></div>
-        <div class="row"><span class="lbl">Vitesse</span><div class="seg" data-seg="dbSpeed"><button data-v="10">×10</button><button data-v="30">×30</button><button data-v="60">×60</button><button data-v="120">×120</button></div></div>
-        <div class="row"><span class="lbl">Tracé</span><div class="seg" data-seg="dbMode"><button data-v="TRUE" title="Routes fond sur la carte">Mouvement vrai</button><button data-v="REL" title="Centré sur le porteur : une route relative qui passe par le centre = relèvement constant">Mouvement relatif</button></div></div>
-        <div class="row"><span class="lbl">Arrêt automatique</span><div class="seg" data-seg="dbAuto"><button data-v="1">Aux moments clés</button><button data-v="0">Jamais</button></div></div>
-        <h4>Situation au curseur (vérité terrain)</h4>
-        <div id="dbSit"></div>
-        <h4>Moments clés</h4>
-        <div id="dbKeys"></div>
-        <details><summary>Chronologie complète (ordres, alertes, journal)</summary><div id="dbAll"></div></details>
-        <p class="dim small">Les jalons « fenêtre de manœuvre » (TCPA 12 min) et « tardive » (TCPA 5 min, 6 min en brume) sont des repères de bonne pratique alignés sur l'évaluation : le RIPAM ne fixe pas de valeurs chiffrées. Cliquez sur un navire du tracé ou sur une situation du bilan pour la suivre ; molette et glisser pour zoomer, double-clic pour recadrer.</p>
-      </div>
-    </div>
-    <div id="report"><p class="dim">Le bilan s'affiche à la fin de l'exercice (ou en cas d'abordage). Les situations sont évaluées une fois dégagées.</p></div>
+  <section class="tab" id="t-journal">
+    <div class="row"><button class="red" data-act="finish" title="Clore l'exercice et afficher le bilan">Terminer et évaluer</button></div>
     <h4>Journal de passerelle</h4>
     <div id="log"></div>
     <details class="memo"><summary>Mémo RIPAM (règles 5 à 19)</summary>
@@ -223,8 +164,122 @@
       <p><b>R19 Visibilité réduite</b> — pas de privilégié. Vitesse de sécurité et machines parées. Un navire qui détecte au radar seul une situation très rapprochée manœuvre largement à temps, en évitant : (i) de venir sur bâbord pour un navire sur l'avant du travers (sauf s'il est rattrapé) ; (ii) de venir vers un navire par le travers ou sur l'arrière du travers. Signal de brume entendu sur l'avant du travers, ou situation très rapprochée inévitable : réduire au minimum pour gouverner, casser l'erre si nécessaire.</p>
     </details>
   </section>
+
+  <section class="tab" id="t-debrief">
+    <div class="row"><button data-act="ovBilan">Bilan</button><button data-act="newRun">Rejouer</button><button data-act="ovExo">Autre exercice</button></div>
+    <div id="dbCtl" hidden>
+        <div class="row"><button data-act="dbPrev" title="Moment clé précédent (←)">⏮</button><button data-act="dbPlay" id="dbPlayBtn" title="Lecture / pause (Espace)">▶</button><button data-act="dbNext" title="Moment clé suivant (→)">⏭</button>
+          <input type="range" id="dbSlider" min="0" max="1000" value="0"><b id="dbTime" class="mono">T+00:00</b></div>
+        <div class="row"><span class="lbl">Vitesse</span><div class="seg" data-seg="dbSpeed"><button data-v="10">×10</button><button data-v="30">×30</button><button data-v="60">×60</button><button data-v="120">×120</button></div></div>
+        <div class="row"><span class="lbl">Tracé</span><div class="seg" data-seg="dbMode"><button data-v="TRUE" title="Routes fond sur la carte">Mouvement vrai</button><button data-v="REL" title="Centré sur le porteur : une route relative qui passe par le centre = relèvement constant">Mouvement relatif</button></div></div>
+        <div class="row"><span class="lbl">Arrêt automatique</span><div class="seg" data-seg="dbAuto"><button data-v="1">Aux moments clés</button><button data-v="0">Jamais</button></div></div>
+        <h4>Situation au curseur (vérité terrain)</h4>
+        <div id="dbSit"></div>
+        <h4>Moments clés</h4>
+        <div id="dbKeys"></div>
+        <details><summary>Chronologie complète (ordres, alertes, journal)</summary><div id="dbAll"></div></details>
+        <p class="dim small">Les jalons « fenêtre de manœuvre » (TCPA 12 min) et « tardive » (TCPA 5 min, 6 min en brume) sont des repères de bonne pratique alignés sur l'évaluation : le RIPAM ne fixe pas de valeurs chiffrées. Cliquez sur un navire du tracé ou sur une situation du bilan pour la suivre ; molette et glisser pour zoomer, double-clic pour recadrer.</p>
+      </div>
+  </section>
 </div>
+<aside id="settings">
+  <div class="ovHead"><b>⚙ Réglages</b><span class="sp"></span><button data-act="settings" title="Fermer (Échap)">✕</button></div>
+  <details open><summary>Présentation radar</summary>
+    <div class="row"><span class="lbl">Mouvement</span><div class="seg" data-seg="motion"><button data-v="RM">Relatif (RM)</button><button data-v="TM">Vrai (TM)</button></div></div>
+    <div class="row"><span class="lbl">Orientation</span><div class="seg" data-seg="orient"><button data-v="NU">North up</button><button data-v="CU">Course up</button><button data-v="HU">Head up</button></div></div>
+    <div class="row"><span class="lbl">Décentrage (RM)</span><div class="seg" data-seg="offMode"><button data-v="OFF">Centré</button><button data-v="FWD">Vue avant 50 %</button><button data-v="CUR">Au curseur (O)</button></div></div>
+    <div class="row"><span class="lbl">Vecteurs</span><div class="seg" data-seg="vec"><button data-v="REL">Relatifs</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="vecMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button><button data-v="20">20'</button></div></div>
+    <div class="row"><span class="lbl">Stabilisation</span><div class="seg" data-seg="stab"><button data-v="GND">Sol (GNSS)</button><button data-v="SEA">Eau (loch)</button></div></div>
+    <div class="row"><span class="lbl">Sillages</span><div class="seg" data-seg="trail"><button data-v="OFF">Off</button><button data-v="REL">Rel.</button><button data-v="TRUE">Vrais</button></div><div class="seg" data-seg="trailMin"><button data-v="3">3'</button><button data-v="6">6'</button><button data-v="12">12'</button></div></div>
+    <div class="row"><span class="lbl">Positions passées</span><div class="seg" data-seg="pastMin"><button data-v="0">Off</button><button data-v="0.5">30 s</button><button data-v="1">1 min</button><button data-v="2">2 min</button></div></div>
+    <div class="row"><span class="lbl">Bande</span><div class="seg" data-seg="band"><button data-v="X">X (3 cm)</button><button data-v="S">S (10 cm)</button></div></div>
+    <div class="row"><span class="lbl">AIS sur le radar</span><div class="seg" data-seg="aisRadar"><button data-v="1">Superposé</button><button data-v="0">Masqué</button></div></div>
+    <div class="row"><span class="lbl">Route prévue</span><div class="seg" data-seg="routeShow"><button data-v="1">Affichée</button><button data-v="0">Masquée</button></div><span class="lbl" style="min-width:0">Couloir</span><div class="seg" data-seg="xteLim"><button data-v="0.5">±0,5</button><button data-v="1">±1</button><button data-v="2">±2 NM</button></div></div>
+  </details>
+  <details open><summary>Alertes de poursuite</summary>
+    <div class="row"><span class="lbl">Limite CPA</span><div class="seg" data-seg="cpaLim"><button data-v="0.5">0,5</button><button data-v="1">1,0</button><button data-v="1.5">1,5</button><button data-v="2">2,0 NM</button></div></div>
+    <div class="row"><span class="lbl">Limite TCPA</span><div class="seg" data-seg="tcpaLim"><button data-v="6">6</button><button data-v="12">12</button><button data-v="20">20 min</button></div></div>
+    <div class="row"><span class="lbl">Zone d'acquisition</span><div class="seg" data-seg="zone"><button data-v="0">Off</button><button data-v="6">6 NM</button><button data-v="12">12 NM</button></div></div>
+  </details>
+  <details open><summary>ECDIS</summary>
+    <div class="row"><span class="lbl">Contour de sécurité</span><div class="seg" data-seg="ecSafety"><button data-v="10">10 m</button><button data-v="15">15 m</button><button data-v="20">20 m</button><button data-v="30">30 m</button></div><span id="ecDraft" class="dim small"></span></div>
+    <div class="row"><span class="lbl">Anticipation</span><div class="seg" data-seg="ecLook"><button data-v="3">3 min</button><button data-v="6">6 min</button><button data-v="12">12 min</button></div></div>
+    <div class="row"><span class="lbl">Couches</span><div class="seg" id="ecLayers"><button data-act="layer" data-v="tss">DST</button><button data-act="layer" data-v="depth">Fonds</button><button data-act="layer" data-v="names">Noms</button><button data-act="layer" data-v="ais">AIS</button><button data-act="layer" data-v="arpa">ARPA</button></div></div>
+  </details>
+  <details open><summary>Affichage</summary>
+    <div class="row"><span class="lbl">Palette</span><div class="seg" data-seg="palette"><button data-v="DAY">Jour</button><button data-v="DUSK">Crépuscule</button><button data-v="NIGHT">Nuit</button></div></div>
+    <div class="row"><span class="lbl">Vue Passerelle</span><div class="seg" data-seg="layout"><button data-v="bridge" title="Visuel en haut, radar et ECDIS en bas">Visuel + radar + ECDIS</button><button data-v="split">Radar + ECDIS</button></div></div>
+    <div class="row"><span class="lbl">Vue visuelle</span><div class="seg" data-seg="inst"><button data-v="1">Instruments</button><button data-v="0">Sans</button></div><div class="seg" data-seg="mano"><button data-v="1">Commandes</button><button data-v="0">Sans</button></div><div class="seg" data-seg="mini"><button data-v="1">ECDIS incrusté</button><button data-v="0">Sans</button></div></div>
+  </details>
+  <details open><summary>Son</summary>
+    <div class="row"><span class="lbl">Sons entendus</span><div class="seg" data-seg="hornOn" title="Jouer les signaux sonores (le vôtre et ceux des navires à portée d'audibilité)"><button data-v="1">Oui</button><button data-v="0">Non</button></div></div>
+  </details>
+</aside>
 </main>
+<div class="ov" id="ovExo"><div class="ovBox wide">
+  <div class="ovHead"><b>Exercices</b><span class="dim small">&nbsp;· choisissez un exercice, puis lancez-le</span><span class="sp"></span><button data-act="ovClose" title="Fermer (Échap)">✕</button></div>
+  <div class="exoBody">
+    <div class="exoList"><div class="lvgrid" data-seg="scen"></div></div>
+    <div class="exoSide">
+      <h3 id="scName"></h3>
+      <p id="scDesc"></p>
+      <p class="small dim" id="scEnv"></p>
+      <button class="go launch" data-act="newRun">▶ Lancer l'exercice</button>
+      <div id="curRun" class="card small"></div>
+      <details id="advOpt"><summary>Options avancées : environnement, trafic, avaries</summary>
+        <div class="row"><span class="lbl">Vent</span><span id="windTxt" style="flex:1"></span></div>
+    <div class="row"><input type="range" id="wDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="wSpd" min="0" max="45" step="1" style="flex:1"></div>
+    <div class="row"><span class="lbl">Courant</span><span id="curTxt" style="flex:1"></span></div>
+    <div class="row"><input type="range" id="cDir" min="0" max="350" step="10" style="flex:1"><input type="range" id="cSpd" min="0" max="40" step="1" style="flex:1"></div>
+    <div class="row"><span class="lbl">Visibilité</span><div class="seg" data-seg="vis"><button data-v="good">Bonne</button><button data-v="poor">Réduite (brume)</button></div></div>
+    <div class="row"><span class="lbl">Grains (pluie)</span><div class="seg" data-seg="rainEnv"><button data-v="0">Non</button><button data-v="1">Oui</button></div></div>
+    <div class="row"><span class="lbl">Moment</span><div class="seg" data-seg="night"><button data-v="0">Jour</button><button data-v="1">Nuit</button></div></div>
+    <div class="row"><span class="lbl">Trafic</span><div class="seg" data-seg="comp"><button data-v="disc">Discipliné</button><button data-v="real">Réaliste</button><button data-v="hostile">Imprévisible</button></div></div>
+    <div class="row"><span class="lbl">Avaries</span><div class="seg" data-seg="faults" title="Avaries de machine ou de barre des autres navires, annoncées par VHF / AIS"><button data-v="off">Aucune</button><button data-v="rare">Rares</button><button data-v="freq">Fréquentes</button></div></div>
+        <div class="row"><button data-act="randWx">Météo aléatoire</button></div>
+      </details>
+      <h4>Navire</h4>
+      <p class="small" id="shipInfo"></p>
+      <p class="dim small">Outil d'entraînement complémentaire, non agréé STCW. Cartes schématiques (bathymétrie modélisée, pas de marée), non destinées à la navigation.</p>
+    </div>
+  </div>
+</div></div>
+<div class="ov" id="ovBilan"><div class="ovBox">
+  <div class="ovHead"><b>Bilan de l'exercice</b><span class="sp"></span><button data-act="ovClose" title="Fermer (Échap)">✕</button></div>
+  <div class="ovScroll">
+    <div class="row"><button class="go" data-act="debrief" id="dbOpen" disabled>▶ Revoir l'exercice (débrief)</button><button data-act="newRun">Rejouer</button><button data-act="ovExo">Autre exercice</button></div>
+    <div id="report"><p class="dim">Le bilan s'affiche à la fin de l'exercice (ou en cas d'abordage). Les situations sont évaluées une fois dégagées.</p></div>
+  </div>
+</div></div>
+<div class="ov" id="ovHelp"><div class="ovBox">
+  <div class="ovHead"><b>Commandes à la souris et au clavier</b><span class="sp"></span><button data-act="ovClose" title="Fermer (Échap)">✕</button></div>
+  <div class="ovScroll"><table class="keys">
+        <tr><td>Clic sur un écho</td><td>acquérir / sélectionner la cible</td></tr>
+        <tr><td>Clic ailleurs</td><td>placer l'outil choisi (EBL/VRM 1, 2 ou ligne PI)</td></tr>
+        <tr><td>Molette / + −</td><td>échelle de distance</td></tr>
+        <tr><td>← →</td><td>pilote auto : cap ordonné ±1° (Maj : ±10°) ; barre manuelle : barre ±5° (Maj : ±10°)</td></tr>
+        <tr><td>↑ ↓</td><td>transmetteur d'ordres</td></tr>
+        <tr><td>W / C</td><td>propulseur d'étrave : étrave sur bâbord / sur tribord (par pas de 50 %)</td></tr>
+        <tr><td>A</td><td>acquérir l'écho sous le curseur</td></tr>
+        <tr><td>Suppr</td><td>annuler la cible sélectionnée</td></tr>
+        <tr><td>1 / 2</td><td>EBL/VRM 1 / 2 au curseur</td></tr>
+        <tr><td>P</td><td>ligne PI au curseur</td></tr>
+        <tr><td>O</td><td>décentrer au curseur (recentrer : O à nouveau)</td></tr>
+        <tr><td>M</td><td>mouvement relatif / vrai</td></tr>
+        <tr><td>N</td><td>orientation (north / course / head up)</td></tr>
+        <tr><td>T</td><td>manœuvre d'essai</td></tr>
+        <tr><td>Entrée</td><td>acquitter les alertes</td></tr>
+        <tr><td>V</td><td>vue radar / ECDIS / visuel / passerelle</td></tr>
+        <tr><td>Clic sur les inscriptions du scope</td><td>orientation, mouvement, vecteurs, stabilisation, sillages, limites CPA / TCPA, AIS, bande, anti-clutter mer</td></tr>
+        <tr><td>Q / D, Z, X</td><td>regard à gauche / à droite, sur l'avant, sur l'arrière</td></tr>
+        <tr><td>B, molette (visuel)</td><td>jumelles 7×</td></tr>
+        <tr><td>I</td><td>console d'instruments (vue extérieure)</td></tr>
+        <tr><td>ECDIS : glisser, molette</td><td>déplacer la carte, échelle (E : recentrer)</td></tr>
+        <tr><td>Espace</td><td>lecture / pause</td></tr>
+        <tr><td>?</td><td>cette aide</td></tr>
+        <tr><td>Échap</td><td>fermer la fenêtre ou les réglages</td></tr>
+      </table></div>
+</div></div>
 </div>
 <script type="module" src="./src/main.ts"></script>
 </body>

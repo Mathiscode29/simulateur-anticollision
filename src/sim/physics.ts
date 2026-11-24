@@ -42,6 +42,9 @@ export function ownWater(): Vec {
   return { x: f.x + s.x, y: f.y + s.y };
 }
 
+/** Temps de montée du propulseur d'étrave, de zéro à pleine poussée (s). */
+export const THR_RAMP = 8;
+
 export function stepOwn(dt: number): void {
   stepOwnMMG(S.own, S.own.ship.mmg, dt);
 }
@@ -51,7 +54,7 @@ export function stepOwn(dt: number): void {
  * machine à régime limité en variation (pleine allure atteinte en ~60 s) et attente de 20 s
  * au renversement de marche (moteur lent deux temps).
  */
-export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
+export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number, now = S.t): void {
   const f = TELE[o.tele].f, ns = nSea(p);
   // barre
   let rc: number;
@@ -66,8 +69,8 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
   // machine
   const nT = f * ns;
   if (Math.sign(nT) !== Math.sign(o.n) && Math.abs(o.n) < 0.02 * ns && nT !== 0) {
-    if (o.revUntil === 0) o.revUntil = S.t + 20;
-    if (S.t >= o.revUntil) { o.n = Math.sign(nT) * 0.03 * ns; o.revUntil = 0; }
+    if (o.revUntil === 0) o.revUntil = now + 20;
+    if (now >= o.revUntil) { o.n = Math.sign(nT) * 0.03 * ns; o.revUntil = 0; }
   } else {
     const rate = (ns / 60) * dt;
     const target = Math.sign(nT) !== Math.sign(o.n) && o.n !== 0 ? 0 : nT;
@@ -80,7 +83,15 @@ export function stepOwnMMG(o: OwnShip, p: MMGParams, dt: number): void {
   const ax = wt.x - shipE.x, ay = wt.y - shipE.y; // air relatif (vers où il va)
   const along = ax * wv.x + ay * wv.y, across = ax * ws.x + ay * ws.y;
   const windSpeed = Math.hypot(along, across), windAngle = Math.atan2(-across, -along); // d'où il vient, 0 = de l'avant
-  const s = mmgStep(p, { u: o.u, v: o.v, r: o.r }, { delta: o.rud * D2R, n: o.n, windSpeed, windAngle }, dt);
+  // propulseur d'étrave : la poussée rejoint l'ordre en THR_RAMP secondes (pleine poussée d'un bord à l'autre : 2 × THR_RAMP)
+  const th = o.ship.thruster;
+  let thrust = 0;
+  if (th) {
+    const cmd = clamp(o.thr ?? 0, -1, 1), act = o.thrAct ?? 0;
+    o.thrAct = act + clamp(cmd - act, -dt / THR_RAMP, dt / THR_RAMP);
+    thrust = o.thrAct * th.kN * 1000;
+  }
+  const s = mmgStep(p, { u: o.u, v: o.v, r: o.r }, { delta: o.rud * D2R, n: o.n, windSpeed, windAngle, thrust, xT: th ? th.x * p.L : 0 }, dt);
   o.u = s.u; o.v = s.v; o.r = s.r;
   o.rot = o.r * R2D;
   o.hdg = n360(o.hdg + o.rot * dt);

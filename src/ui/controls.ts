@@ -8,8 +8,8 @@ import { ACQ_TIME, STABLE_TIME, SWP, acquire, cancelTrack, seaLevel, trialRemain
 import { ackAlert, ackAll, sortedAlerts, TRACK_CAPACITY } from '../sim/alerts';
 import { finish } from '../sim/assessment';
 import { visual } from '../sim/visual';
-import { cursor, geo, resetTM } from './render';
-import { centreOnOwn, ecur, fromScr, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
+import { cursor, geo, hotAt, resetTM, type HotKey } from './render';
+import { centreOnOwn, ecur, fromScr, miniCycle, pan, pickAt as ecPickAt, pickedInfo, scrOnLand, setPicked, view as ecView, zoom as ecZoom } from './ecdis';
 import { checkRoute, depthAt, tssAt } from '../sim/chart';
 import { look, lookBy } from './outside';
 import { beep, ensureAudio, hornCfg } from './audio';
@@ -22,15 +22,44 @@ import { aisAssociated } from '../sim/ais';
 /** Vue affichée : la simulation tourne quelle que soit la vue. */
 export type View = 'radar' | 'ecdis' | 'split' | 'visual' | 'bridge' | 'debrief';
 const VIEWS: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge', 'debrief'];
+/** Vue Passerelle : visuel + radar + ECDIS (bridge) ou radar + ECDIS côte à côte (split). */
+let bridgeLayout: 'bridge' | 'split' = 'bridge';
+const isBridge = (v: View) => v === 'bridge' || v === 'split';
 /** Vues parcourues par la touche V (le débrief s'ouvre depuis le bilan). */
-const CYCLE: View[] = ['radar', 'ecdis', 'split', 'visual', 'bridge'];
+const CYCLE = (): View[] => ['radar', 'ecdis', 'visual', bridgeLayout];
 export let currentView: View = 'radar';
 function setView(v: View): void {
-  if (v === 'debrief' && !RP.d && !(S.over && openDebrief())) { logE('Débrief : terminez d\'abord l\'exercice (onglet Bilan).', 'warn'); showTab('bilan'); return; }
+  if (v === 'debrief' && !RP.d && !(S.over && openDebrief())) { logE('Débrief : terminez d\'abord l\'exercice.', 'warn'); openOv('ovBilan'); return; }
+  const was = currentView;
   currentView = v;
   document.body.classList.remove(...VIEWS.map((x) => 'view-' + x));
   document.body.classList.add('view-' + v);
+  if (v === 'debrief') showTab('debrief');
+  else if (was === 'debrief') showTab('conduite');
 }
+
+/** Interface : affichage de la vue visuelle (commandes de manœuvre, ECDIS incrusté). */
+export const ui = { mano: true, mini: true };
+function bodyFlags(): void {
+  document.body.classList.toggle('mano-on', ui.mano);
+  document.body.classList.toggle('mini-on', ui.mini);
+}
+
+/** Fenêtres (exercices, bilan, aide) et volet des réglages. */
+let ovOpen: string | null = null;
+function openOv(id: string): void {
+  closeOv();
+  document.getElementById(id)?.classList.add('on');
+  ovOpen = id;
+  if (id === 'ovExo') { selScen = S.scen; }
+}
+function closeOv(): void {
+  document.querySelectorAll('.ov.on').forEach((e) => e.classList.remove('on'));
+  ovOpen = null;
+}
+function toggleSettings(on = !document.body.classList.contains('set-open')): void { document.body.classList.toggle('set-open', on); }
+/** Exercice sélectionné dans la fenêtre Exercices (lancé seulement par « Lancer »). */
+let selScen = '';
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 const $in = (id: string) => document.getElementById(id) as HTMLInputElement;
@@ -43,6 +72,20 @@ export function showTab(n: string): void {
 
 let hdgT: number | undefined, rudT: number | undefined;
 const rudTxt = (v: number) => (v === 0 ? 'à zéro' : (v < 0 ? 'bâbord ' : 'tribord ') + Math.abs(v) + '°');
+const thrName = (v: number) => (v === 0 ? 'arrêt' : `étrave sur ${v < 0 ? 'bâbord' : 'tribord'} ${Math.round(Math.abs(v) * 100)} %`);
+function setThr(v: number): void {
+  const o = S.own;
+  if (!o.ship.thruster) return;
+  v = clamp(Math.round(v * 2) / 2, -1, 1);
+  if (v !== (o.thr ?? 0)) { o.thr = v; logE(`Propulseur d'étrave : ${thrName(v)}`); }
+}
+function setManRud(v: number): void {
+  const o = S.own;
+  if (o.ap) { o.ap = false; logE('Barre manuelle'); }
+  o.manRud = clamp(Math.round(v), -35, 35);
+  clearTimeout(rudT);
+  rudT = window.setTimeout(() => logE(`Barre ${rudTxt(S.own.manRud)}`), 700);
+}
 const R = () => S.radar;
 
 function setPalette(p: RadarSettings['palette']): void {
@@ -96,10 +139,19 @@ const SEGS: Record<string, Seg> = {
   night: { g: () => (S.env.night ? '1' : '0'), s: (v) => (S.env.night = v === '1') },
   comp: { g: () => S.env.comp, s: (v) => (S.env.comp = v as Compliance) },
   faults: { g: () => S.env.faults, s: (v) => (S.env.faults = v as Faults) },
-  scen: { g: () => S.scen, s: (v) => { S.scen = v; applyScenarioEnv(v); syncEnv(); } },
+  // exercice en cours : la sélection (et son environnement imposé) ne s'applique qu'au lancement
+  scen: { g: () => selScen || S.scen, s: (v) => { selScen = v; if (!S.started || S.over) { S.scen = v; applyScenarioEnv(v); syncEnv(); } } },
   routeShow: { g: () => (S.route?.show ? '1' : '0'), s: (v) => { if (S.route) S.route.show = v === '1'; } },
   xteLim: { g: () => String(S.route?.xteLim ?? 1), s: (v) => { if (S.route) S.route.xteLim = +v; } },
-  view: { g: () => currentView, s: (v) => setView(v as View) },
+  view: { g: () => (currentView === 'split' ? 'bridge' : currentView), s: (v) => {
+    if (v === 'bridge') { if (isBridge(currentView)) bridgeLayout = currentView === 'bridge' ? 'split' : 'bridge'; setView(bridgeLayout); } else setView(v as View);
+  } },
+  layout: { g: () => bridgeLayout, s: (v) => { bridgeLayout = v as typeof bridgeLayout; if (isBridge(currentView)) setView(bridgeLayout); } },
+  inst: { g: () => (look.inst ? '1' : '0'), s: (v) => (look.inst = v === '1') },
+  mano: { g: () => (ui.mano ? '1' : '0'), s: (v) => { ui.mano = v === '1'; bodyFlags(); } },
+  mini: { g: () => (ui.mini ? '1' : '0'), s: (v) => { ui.mini = v === '1'; bodyFlags(); } },
+  pred: { g: () => String(S.ecdis.pred), s: (v) => (S.ecdis.pred = +v) },
+  thr: { g: () => String(S.own.thr ?? 0), s: (v) => setThr(+v) },
   ecSafety: { g: () => String(S.ecdis.safety), s: (v) => { S.ecdis.safety = +v; logE(`ECDIS : contour de sécurité ${v} m`); } },
   ecLook: { g: () => String(S.ecdis.look), s: (v) => (S.ecdis.look = +v) },
   ecTool: { g: () => S.ecdis.tool, s: (v) => (S.ecdis.tool = v as typeof S.ecdis.tool) },
@@ -182,7 +234,15 @@ const ACT: Record<string, (v: string) => void> = {
   horn(v) { if (S.started && !S.over) ownSignal(v); },
   play() { if (S.over) newScenario(); S.started = true; S.paused = !S.paused; },
   hdg(v) { stepHdg(+v); },
-  rud(v) { const o = S.own; o.ap = false; o.manRud = +v; $in('rudSl').value = v; logE(`Barre ${rudTxt(+v)}`); },
+  rud(v) { setManRud(+v); $in('rudSl').value = v; },
+  pal() { setPalette(R().palette === 'DAY' ? 'DUSK' : R().palette === 'DUSK' ? 'NIGHT' : 'DAY'); },
+  settings() { toggleSettings(); },
+  ovExo() { openOv('ovExo'); },
+  ovBilan() { openOv('ovBilan'); },
+  ovHelp() { openOv('ovHelp'); },
+  ovClose() { closeOv(); },
+  manoT() { ui.mano = !ui.mano; bodyFlags(); },
+  miniT() { ui.mini = !ui.mini; bodyFlags(); },
   tele(v) { S.own.tele = +v; logE(`Machine : ${TELE[+v].n}`); },
   rng(v) { rangeStep(+v); },
   dropSel() { if (S.sel !== null) cancelTrack(S.sel); },
@@ -198,15 +258,17 @@ const ACT: Record<string, (v: string) => void> = {
     syncEnv();
   },
   newRun() {
-    newScenario(); S.started = true; S.paused = false; showTab('barre');
+    if (selScen && SCEN[selScen] && S.scen !== selScen) { S.scen = selScen; applyScenarioEnv(selScen); syncEnv(); }
+    newScenario(); S.started = true; S.paused = false; showTab('conduite');
     RP.d = null; RP.playing = false; dbKeysFor = null;
+    closeOv(); selScen = '';
     if (currentView === 'debrief') setView('radar');
   },
-  debrief() { if (S.over && openDebrief()) { dbKeysFor = null; setView('debrief'); } },
+  debrief() { if (S.over && openDebrief()) { dbKeysFor = null; closeOv(); setView('debrief'); } },
   dbPlay() { togglePlay(); },
   dbPrev() { stepKey(-1); },
   dbNext() { stepKey(1); },
-  finish() { if (!S.over && S.started) finish(); },
+  finish() { if (!S.over && S.started) finish(); else if (S.report) openOv('ovBilan'); },
   ackAll() { ackAll(); },
   silence() { S.silencedUntil = performance.now() + 30000; },
   look(v) { lookBy(+v); },
@@ -229,6 +291,24 @@ const ACT: Record<string, (v: string) => void> = {
     if (r && r.wps.length > Math.max(1, r.leg + 2)) { r.wps.pop(); routeCheck(); }
   },
   routeCheck() { routeCheck(); },
+};
+
+/** Inscriptions cliquables du scope radar : chaque clic passe à l'option suivante. */
+const cyc = <T,>(list: readonly T[], v: T): T => list[(list.indexOf(v) + 1) % list.length];
+const HOT: Record<HotKey, () => void> = {
+  orient() { setOrient(cyc<RadarSettings['orient']>(R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU'], R().orient)); },
+  motion() { setMotion(R().motion === 'RM' ? 'TM' : 'RM'); },
+  range() { rangeStep(1); },
+  band() { R().band = R().band === 'X' ? 'S' : 'X'; logE(`Radar bande ${R().band}`); },
+  sea() { R().seaAuto = !R().seaAuto; },
+  vec() { R().vec = R().vec === 'REL' ? 'TRUE' : 'REL'; },
+  vecMin() { R().vecMin = cyc([3, 6, 12, 20], R().vecMin); },
+  stab() { R().stab = R().stab === 'GND' ? 'SEA' : 'GND'; },
+  trail() { R().trail = cyc<RadarSettings['trail']>(['OFF', 'REL', 'TRUE'], R().trail); },
+  trailMin() { R().trailMin = cyc([3, 6, 12], R().trailMin); },
+  cpa() { R().cpaLim = cyc([0.5, 1, 1.5, 2], R().cpaLim); },
+  tcpa() { R().tcpaLim = cyc([6, 12, 20], R().tcpaLim); },
+  ais() { S.ecdis.aisRadar = !S.ecdis.aisRadar; },
 };
 
 const BFT = [1, 4, 7, 11, 17, 22, 28, 34, 41, 48, 56, 64];
@@ -261,7 +341,7 @@ function renderReport(): void {
     h += `<div class="card"${it.tid !== undefined ? ` data-tid="${it.tid}" title="Cliquer pour revoir cette situation"` : ''}><b>${esc(it.label)}</b> <span class="dim">· ${esc(it.name)} ${it.L} m</span><div style="color:var(--ac);font-size:12px;margin:3px 0">${esc(it.role)}</div>${msgs(it.msgs)}<div class="msg info">L'autre navire : ${esc(it.other)}.</div></div>`;
   }
   $('report').innerHTML = h;
-  showTab('bilan');
+  openOv('ovBilan');
   upd();
 }
 
@@ -310,8 +390,47 @@ function updDebrief(): void {
   document.querySelectorAll<HTMLElement>('#dbKeys .k').forEach((el) => el.classList.toggle('cur', +el.dataset.i! === ci));
 }
 
+/** Fenêtre Exercices : exercice sélectionné, environnement, exercice en cours. */
+function updExo(): void {
+  const k = selScen || S.scen, sc = SCEN[k], e = S.env;
+  $('exoName').textContent = S.started && !S.over ? SCEN[S.scen].n : 'Exercices';
+  if (!ovOpen || ovOpen !== 'ovExo') return;
+  $('scName').textContent = sc.n;
+  $('scDesc').textContent = sc.d;
+  $('scEnv').textContent = `Niveau ${sc.lvl} · ${LEVELS[sc.lvl]} · vent ${p3(e.windFrom)}°/${e.windKn} kn · courant →${p3(e.curSet)}°/${e.curKn.toFixed(1)} kn · ${e.vis === 'poor' ? 'brume' : 'bonne visibilité'} · ${e.night ? 'nuit' : 'jour'}${e.rain ? ' · grains' : ''}`;
+  const cur = S.started && !S.over
+    ? `<b>Exercice en cours :</b> ${esc(SCEN[S.scen].n)}, T+${fT(S.t)}.${k !== S.scen ? ' « Lancer » l\'abandonne pour le nouvel exercice.' : ''}<div class="row"><button class="red" data-act="finish">Terminer et évaluer</button><button data-act="ovClose">Reprendre</button></div>`
+    : S.over && S.report ? `<b>Dernier exercice :</b> ${esc(SCEN[S.scen].n)} · ${S.report.score}/100<div class="row"><button data-act="ovBilan">Voir le bilan</button></div>` : '';
+  if ($('curRun').innerHTML !== cur) $('curRun').innerHTML = cur;
+}
+
+/** Console de manœuvre de la vue visuelle et propulseur d'étrave. */
+function updMano(): void {
+  const o = S.own, th = o.ship.thruster, act = o.thrAct ?? 0;
+  $('mRudTxt').textContent = o.ap ? fmtR(o.rudCmd ?? o.rud) + '°' : fmtR(o.manRud) + '°';
+  $('mRudAct').textContent = `réel ${fmtR(o.rud)}°`;
+  $('mHelm').textContent = o.ap ? `PILOTE AUTO ${p3(o.cmdHdg)}°` : 'MANUELLE';
+  const sl = $in('mRudSl');
+  if (document.activeElement !== sl) sl.value = String(Math.round(o.ap ? o.rud : o.manRud));
+  $('mRotTxt').textContent = `ROT ${(o.rot * 60 >= 0 ? '+' : '') + Math.round(o.rot * 60)}°/min · cap ${o.hdg.toFixed(1)}°`;
+  $('mTeleTxt').textContent = `${Math.round(o.n * 60)} tr/min${o.revUntil > 0 ? ` · renv. ${Math.max(0, Math.ceil(o.revUntil - S.t))} s` : ''}`;
+  document.querySelectorAll<HTMLButtonElement>('#mTele button').forEach((b) => b.classList.toggle('on', +b.dataset.v! === o.tele));
+  const f = $('mThrFill');
+  f.style.left = `${50 + Math.min(0, act) * 50}%`; f.style.width = `${Math.abs(act) * 50}%`;
+  const U = Math.hypot(o.u, o.v), eff = Math.round(100 / (1 + U * U));
+  const txt = th ? `${act === 0 ? 'arrêt' : `${act < 0 ? 'Bd' : 'Td'} ${Math.round(Math.abs(act) * 100)} %`} · efficacité ≈ ${eff} %` : 'pas de propulseur';
+  $('mThrTxt').textContent = txt;
+  $('thrTxt').textContent = th ? `${txt} · ${th.kW} kW` : '';
+}
+
 export function upd(): void {
   updDebrief();
+  updExo();
+  updMano();
+  document.body.classList.toggle('has-report', !!S.report);
+  $('palBtn').textContent = R().palette === 'DAY' ? 'Jour' : R().palette === 'NIGHT' ? 'Nuit' : 'Crépuscule';
+  document.querySelector('.vbar [data-act=manoT]')?.classList.toggle('on', ui.mano);
+  document.querySelector('.vbar [data-act=miniT]')?.classList.toggle('on', ui.mini);
   document.querySelector('.vbar [data-act=binoc]')?.classList.toggle('on', look.binoc);
   document.querySelector('.vbar [data-act=lookAft]')?.classList.toggle('on', look.aft);
   document.querySelector('.vbar [data-act=inst]')?.classList.toggle('on', look.inst);
@@ -366,13 +485,12 @@ export function upd(): void {
   $('manBox').style.display = o.ap ? 'none' : '';
   $('cmdTxt').textContent = p3(o.cmdHdg);
   $('rudTxt').textContent = fmtR(o.manRud) + '°';
-  $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${String(o.ship.max).replace(".", ",")} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.`;
+  $('shipInfo').textContent = `${o.ship.n} · vitesse de service ${String(o.ship.max).replace(".", ",")} kn · modèle hydrodynamique MMG 3 DDL (${o.ship.src}). Renversement de marche : 20 s d'attente moteur.${o.ship.thruster ? ` ${o.ship.thruster.kW} kW au propulseur d'étrave (${o.ship.thruster.note}).` : ''}`;
   $('rngTxt').textContent = Rs.range + ' NM';
   $('trHTxt').textContent = p3(Rs.trialHdg) + '°';
   $('trSTxt').textContent = Rs.trialSpd + ' kn';
   const rem = trialRemaining();
   $('trCount').textContent = Rs.trial ? (rem > 0 ? `manœuvre dans ${fT(rem)}` : 'manœuvre immédiate') : '';
-  $('scDesc').textContent = SCEN[S.scen].d;
   const sliders: [string, number][] = [['gainSl', Rs.gain], ['seaSl', Math.round(seaLevel() * 100)], ['rainSl', Rs.rain]];
   for (const [id, val] of sliders) {
     const el = $in(id);
@@ -448,10 +566,19 @@ function initEcdisInput(ec: HTMLCanvasElement): void {
 
 export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): void {
   initEcdisInput(ec);
-  document.querySelector('.scgrid')!.innerHTML = [1, 2, 3, 4, 5, 6, 7].map((l) => `<div class="lvl">${LEVELS[l]}</div>`
-    + Object.entries(SCEN).filter(([, s]) => s.lvl === l).map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('')).join('');
+  document.querySelector('.lvgrid')!.innerHTML = [1, 2, 3, 4, 5, 6, 7].map((l) => {
+    const list = Object.entries(SCEN).filter(([, s]) => s.lvl === l);
+    return `<div class="lvcard"><div class="lvt">Niveau ${l} · ${esc(LEVELS[l])}</div><div class="lvn">${list.length} exercice${list.length > 1 ? 's' : ''}</div>`
+      + list.map(([k, s]) => `<button data-v="${k}" title="${esc(s.d)}">${esc(s.n)}</button>`).join('') + '</div>';
+  }).join('');
   $('tele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : ''}">${t.n}</button>`).reverse().join('');
+  $('mTele').innerHTML = TELE.map((t, i) => `<button data-act="tele" data-v="${i}" class="${t.f < 0 ? 'ast' : t.f > 0 ? 'fw' : ''}">${t.n}</button>`).reverse().join('');
   setPalette(R().palette);
+  bodyFlags();
+  // fenêtres : clic sur le fond pour fermer
+  document.querySelectorAll<HTMLElement>('.ov').forEach((ov) => ov.addEventListener('pointerdown', (ev) => { if (ev.target === ov) closeOv(); }));
+  $in('mRudSl').addEventListener('input', (e) => { setManRud(+(e.target as HTMLInputElement).value); $in('rudSl').value = String(S.own.manRud); upd(); });
+  $('miniWrap').addEventListener('pointerdown', () => { miniCycle(); upd(); });
 
   document.addEventListener('pointerdown', ensureAudio);
   document.addEventListener('click', (ev) => {
@@ -472,6 +599,7 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     if (!RP.d) { if (!(S.over && openDebrief())) return; dbKeysFor = null; }
     if (tid !== undefined) RP.focus = tid;
     if (t !== undefined) { RP.playing = false; seek(t); }
+    closeOv();
     if (currentView !== 'debrief') setView('debrief');
     upd();
   };
@@ -498,12 +626,7 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     const b = (ev.target as HTMLElement).closest('button[data-ack]') as HTMLElement | null;
     if (b) { ackAlert(b.dataset.ack!); upd(); }
   });
-  $in('rudSl').addEventListener('input', (e) => {
-    const o = S.own; o.ap = false; o.manRud = +(e.target as HTMLInputElement).value;
-    clearTimeout(rudT);
-    rudT = window.setTimeout(() => logE(`Barre ${rudTxt(o.manRud)}`), 900);
-    upd();
-  });
+  $in('rudSl').addEventListener('input', (e) => { setManRud(+(e.target as HTMLInputElement).value); upd(); });
   $in('gainSl').addEventListener('input', (e) => { R().gain = +(e.target as HTMLInputElement).value; });
   $in('seaSl').addEventListener('input', (e) => { R().sea = +(e.target as HTMLInputElement).value; R().seaAuto = false; });
   $in('rainSl').addEventListener('input', (e) => { R().rain = +(e.target as HTMLInputElement).value; });
@@ -520,10 +643,12 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     const rc = canvas.getBoundingClientRect();
     cursor.x = ev.clientX - rc.left; cursor.y = ev.clientY - rc.top;
   };
-  canvas.addEventListener('pointermove', setCursor);
+  canvas.addEventListener('pointermove', (ev) => { setCursor(ev); canvas.style.cursor = hotAt(cursor.x!, cursor.y!) ? 'pointer' : ''; });
   canvas.addEventListener('pointerleave', () => { cursor.x = null; cursor.y = null; });
   canvas.addEventListener('pointerdown', (ev) => {
     setCursor(ev);
+    const hs = hotAt(cursor.x!, cursor.y!);
+    if (hs) { HOT[hs](); upd(); return; }
     const p = pickAt(cursor.x!, cursor.y!);
     if (p) acquireOrSelect(p);
     else {
@@ -546,6 +671,9 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     ensureAudio();
     const k = ev.key;
     let done = true;
+    if (k === 'Escape') { if (ovOpen) closeOv(); else toggleSettings(false); ev.preventDefault(); upd(); return; }
+    if (k === '?') { if (ovOpen === 'ovHelp') closeOv(); else openOv('ovHelp'); ev.preventDefault(); return; }
+    if (ovOpen) return; // fenêtre ouverte : pas de raccourcis
     if (currentView === 'debrief' && RP.d && [' ', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(k)) {
       if (k === ' ') togglePlay();
       else if (k === 'ArrowLeft') { if (ev.shiftKey) seek(RP.t - 30); else stepKey(-1); }
@@ -555,8 +683,10 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
       ev.preventDefault(); upd(); return;
     }
     if (k === ' ') ACT.play('');
-    else if (k === 'ArrowLeft') stepHdg(ev.shiftKey ? -10 : -1);
-    else if (k === 'ArrowRight') stepHdg(ev.shiftKey ? 10 : 1);
+    else if (k === 'ArrowLeft') { if (S.own.ap) stepHdg(ev.shiftKey ? -10 : -1); else setManRud(S.own.manRud - (ev.shiftKey ? 10 : 5)); }
+    else if (k === 'ArrowRight') { if (S.own.ap) stepHdg(ev.shiftKey ? 10 : 1); else setManRud(S.own.manRud + (ev.shiftKey ? 10 : 5)); }
+    else if (k === 'w' || k === 'W') setThr((S.own.thr ?? 0) - 0.5);
+    else if (k === 'c' || k === 'C') setThr((S.own.thr ?? 0) + 0.5);
     else if (k === 'ArrowUp') stepTele(1);
     else if (k === 'ArrowDown') stepTele(-1);
     else if (k === '+' || k === '=') rangeStep(1);
@@ -570,18 +700,20 @@ export function initControls(canvas: HTMLCanvasElement, ec: HTMLCanvasElement): 
     else if (k === 'n' || k === 'N') { const seq: RadarSettings['orient'][] = R().motion === 'TM' ? ['NU', 'CU'] : ['NU', 'CU', 'HU']; setOrient(seq[(seq.indexOf(R().orient) + 1) % seq.length]); }
     else if (k === 't' || k === 'T') setTrial(!R().trial);
     else if (k === 'Enter') ackAll();
-    else if (k === 'v' || k === 'V') setView(CYCLE[(Math.max(0, CYCLE.indexOf(currentView)) + 1) % CYCLE.length]);
+    else if (k === 'v' || k === 'V') { const c = CYCLE(); setView(c[(Math.max(0, c.indexOf(currentView)) + 1) % c.length]); }
     else if (k === 'q' || k === 'Q') lookBy(ev.shiftKey ? -2 : -10);
     else if (k === 'd' || k === 'D') lookBy(ev.shiftKey ? 2 : 10);
     else if (k === 'z' || k === 'Z') { look.rel = 0; look.aft = false; }
     else if (k === 'x' || k === 'X') { look.aft = !look.aft; look.rel = 0; }
     else if (k === 'b' || k === 'B') look.binoc = !look.binoc;
     else if (k === 'i' || k === 'I') look.inst = !look.inst;
-    else if (k === 'c' || k === 'C') centreOnOwn();
+    else if (k === 'e' || k === 'E') centreOnOwn();
     else done = false;
     if (done) { ev.preventDefault(); upd(); }
   });
 
   setInterval(soundTick, 1000);
   syncEnv();
+  // écran de départ : choix de l'exercice
+  openOv('ovExo');
 }

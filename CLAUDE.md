@@ -27,22 +27,26 @@ src/sim/    mmg.ts (modèle MMG 3 DDL, SI), manoeuvres.ts (giration, zigzag, arr
             faults.ts (avaries machine/barre, abordage entre cibles, réparation, messages VHF/AIS nominatifs), assessment.ts (suivi des situations, évaluation, rapport),
             scenarios.ts (32 exercices sur 7 niveaux, exercices de port, navires au mouillage, rencontres après point tournant, trafic des voies du DST), visual.ts (feux, marques,
             signaux de brume, feux et marques en 3D pour la vue extérieure), debrief.ts (enregistrement de l'exercice, analyse et moments clés
-            du débrief), sound.ts (signaux sonores R34 / R35, annexe III : émission, portée d'audibilité, suivi R35), loop.ts (pas de simulation)
+            du débrief), predict.ts (prédicteur : intégration du modèle du porteur avec les ordres en cours), sound.ts (signaux sonores R34 / R35, annexe III : émission, portée d'audibilité, suivi R35), loop.ts (pas de simulation)
 src/ui/     render.ts (scope PPI : modes RM/TM, décentrage, symboles SN.1/Circ.243, EBL/VRM/PI, curseur, côte, AIS, palettes),
-            ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD),
+            ecdis.ts (vue ECDIS : couches précalculées, DST, bouées, AIS/ARPA, route, EBL/VRM, HUD, prédicteur, échelles de port,
+            ECDIS incrusté de la vue visuelle à zoom automatique),
             debrief.ts (rejeu : tracé vrai / relatif, graphe des distances, commentaire des moments clés),
             outside.ts (vue extérieure 2D par défaut : caméra, regard ± 90°, jumelles, silhouettes en blocs par famille de navire,
             ciel / mer / relief en paliers, cadre de passerelle, bandeau, console d'instruments ; 30 i/s),
             audio.ts (Web Audio : bips d'alerte, sifflet, cloche et gong spatialisés),
             rudder.ts (répétiteurs de l'onglet Barre : angle de barre réel et ordonné, ROT), telegraph.ts (transmetteur d'ordres à échelle −10…+10, manette, réponse machine),
-            controls.ts (DOM, vues Radar / ECDIS / Radar + ECDIS / Visuel / Passerelle / Débrief, panneaux, alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
+            controls.ts (DOM, vues Radar / ECDIS / Visuel / Passerelle (ou Radar + ECDIS) / Débrief, onglets Conduite / Radar / ECDIS / Journal,
+            volet ⚙ Réglages, fenêtres Exercices / Bilan / Aide, inscriptions cliquables du scope, console de manœuvre de la vue visuelle,
+            alertes, clavier/souris, son), style.css (palettes jour/crépuscule/nuit)
 tests/      rules.test.ts (moteur de règles), simulation.test.ts (scénarios sans affichage, évaluation),
             manoeuvrabilite.test.ts (critères OMI sur chaque navire MMG), alertes.test.ts (cycle des alertes radar),
             route.test.ts (XTE, points tournants, rencontres après abattée), pasdecalais.test.ts (géoréférencement, carte, AIS, R10, ECDIS),
             gibraltar.test.ts (DST COLREG.2/Circ.66, zones de prudence, trafic des voies, exercices),
             trafic.test.ts (évitement entre cibles, avaries, changement de rôle), visuel.test.ts (feux 3D, marques de jour, familles de silhouettes),
             debrief.test.ts (enregistrement, interpolation, moments clés), mouillage-sons.test.ts (R30, R34, R35),
-            havre-ouessant.test.ts (chenal, bassins, entrée au port, R9, ville ; DST d'Ouessant), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
+            havre-ouessant.test.ts (chenal, bassins, entrée au port, R9, ville ; DST d'Ouessant),
+            manoeuvre.test.ts (propulseur d'étrave, prédicteur), radar.test.ts (datation des échos, balayage continu, vecteurs surface et fond)
 docs/       manoeuvrabilite.md (généré), conformite-radar.md (grille MSC.192(79) / SN.1/Circ.243 / repères ECDIS, à tenir à jour),
             carte-pas-de-calais.md, carte-gibraltar.md, carte-le-havre.md, carte-ouessant.md (sources et limites des cartes)
 scripts/    manoeuvrabilite.ts (rapport de manœuvrabilité)
@@ -60,6 +64,7 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - L'évaluation du chef de quart (`assessment.ts`) utilise la vérité terrain ; chaque message de bilan cite la règle RIPAM concernée. Exception : la tenue de route (écart, reprise de la route) relève de la bonne pratique et du plan de traversée, sans pénalité sur la note.
 - Un nouvel exercice = une entrée de `SCEN` avec niveau, description, environnement imposé éventuel et route ; le test générique de `simulation.test.ts` le couvre automatiquement. Exercice sur carte réelle : `chart: 'pdc'`, `'gib'`, `'lh'` ou `'ush'`, départ `start` et points tournants `wpts` en latitude / longitude WGS 84 ; trafic des voies avec `laneShip`, `laneMeet`, `laneMeetRoute` (au croisement de la route prévue), `laneAhead`, `laneAt`, `laneFill` (identifiants de voie : NE/SW au Pas-de-Calais et à Ouessant, W/E à Gibraltar ; voies de chenal `LHin`/`LHout`, `P2in`/`P2out` au Havre). Exercice de port : `draft` (tirant d'eau d'exercice, navire allégé, le modèle MMG restant celui en charge), `startKn`, `tele`, `xte` ; un chenal (`fairways`, R9) est un axe orienté vers le port avec largeur et profondeur draguée, prolongé dans le port par `inner` pour le trafic. Nouvelle carte : un `ChartSource` dans `src/core/charts/` (types communs dans `types.ts`), enregistré dans `SOURCES` de `sim/chart.ts`.
 - Positions : le moteur travaille en plan local (NM) ; toute donnée géographique est saisie en WGS 84 et convertie par `core/geo.ts`. Affichage au format marin (51°02,345'N 001°23,456'E).
+- Ergonomie (V1.9) : ce qui sert pendant le quart reste sous la main (onglets Conduite, Radar, ECDIS, Journal ; inscriptions du scope cliquables ; commandes de manœuvre dans la vue visuelle) ; ce qu'on règle une fois va dans ⚙ Réglages ; le choix de l'exercice et le bilan sont des fenêtres. Un nouveau réglage : `data-seg` + entrée de `SEGS` dans `controls.ts`, placé selon cette règle.
 - Les vues (radar, ECDIS, vue extérieure) ne font que lire `S` : changer de vue n'interrompt jamais la simulation. La vue extérieure est rendue par défaut en canvas 2D « en blocs » (`outside.ts`) : priorité à la fluidité sur un ordinateur courant, sans viser le photoréalisme. Pas de bibliothèque 3D (le rendu WebGL essayé en V1.1 a été retiré en V1.3, trop lourd) ; aucune dépendance d'exécution.
 - Toute modification de `rules.ts` ou `assessment.ts` s'accompagne d'un test dans `tests/`.
 - Les jalons du débrief (TCPA 12 min, seuil tardif 5 min / 6 min en brume, R17a(ii) à TCPA 8 min, R17b) restent alignés sur les seuils de `assessment.ts` ; ils sont présentés comme des repères de bonne pratique, pas comme des valeurs du RIPAM.
@@ -86,6 +91,8 @@ Règle d'architecture : **`src/core` et `src/sim` n'accèdent jamais au DOM**. T
 - Un navire MMG = un fichier dans `src/core/ships/` avec la **source publiée** de chaque coefficient ; toute valeur estimée est signalée comme telle en commentaire.
 - Tout nouveau navire MMG doit passer `tests/manoeuvrabilite.test.ts` (critères OMI) et figurer dans `docs/manoeuvrabilite.md` (relancer `npm run manoeuvrabilite`).
 - Aucune valeur inventée présentée comme mesurée.
+- Propulseur d'étrave (`ShipModel.thruster`) : modèle simplifié hors méthode MMG (effort transversal à l'avant, efficacité 1 / (1 + U²)) ; celui du KVLCC2 (2 000 kW, 240 kN) est une valeur d'entraînement estimée, signalée comme telle.
+- Une fiche pilote (giration, arrêt, Williamson) donne des cibles de validation, pas des coefficients MMG : elle ne suffit pas à créer un navire MMG.
 
 ## Garde-fous
 
